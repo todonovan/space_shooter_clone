@@ -1,5 +1,38 @@
 #include <windows.h>
 
+static BITMAPINFO BitmapInfo;
+static HBITMAP DibSection;
+static void *BitmapMemory;
+static HDC BitmapDeviceContext;
+
+void ResizeDIBSection(int X, int Y, int Width, int Height)
+{
+    if (DibSection)
+    {
+        DeleteObject((HGDIOBJ)DibSection);
+    }
+
+    if (!BitmapDeviceContext)
+    {
+        BitmapDeviceContext = CreateCompatibleDC(0);
+    }
+
+    BitmapInfo.bmiHeader.biSize = sizeof(BitmapInfo.bmiHeader);
+    BitmapInfo.bmiHeader.biWidth = Width;
+    BitmapInfo.bmiHeader.biHeight = Height;
+    BitmapInfo.bmiHeader.biPlanes = 1;
+    BitmapInfo.bmiHeader.biBitCount = 32;
+    BitmapInfo.bmiHeader.biCompression = BI_RGB;
+
+    DibSection = CreateDIBSection(BitmapDeviceContext, &BitmapInfo, DIB_RGB_COLORS, &BitmapMemory, 0, 0);    
+
+}
+
+void UpdateGameWindow(HDC WindowDC, int X, int Y, int Width, int Height)
+{
+    StretchDIBits(WindowDC, X, Y, Width, Height, X, Y, Width, Height, BitmapMemory, &BitmapInfo, DIB_RGB_COLORS, SRCCOPY);
+}
+
 /* The main callback for our window. This function will handle all
    messages passed from Windows. The default case must be maintained
    to ensure that messages not explicitly handled are handled by Windows. */
@@ -15,29 +48,30 @@ LRESULT CALLBACK AsteroidsWindowCallback(HWND WindHandle,
         // To do: handle all painting, resize, etc.
         case WM_ACTIVATEAPP:
         {
-            OutputDebugString("Activate app");
             return 0;            
+        }
+        case WM_SIZE:
+        {
+            RECT ClientRect;
+            GetClientRect(WindHandle, &ClientRect);
+            int X = ClientRect.left;
+            int Y = ClientRect.right;
+            int Width = ClientRect.right - ClientRect.left;
+            int Height = ClientRect.bottom - ClientRect.top; // Negative to ensure top-down DIB
+            ResizeDIBSection(X, Y, Width, Height);
+            return 0;
         }
         case WM_PAINT:
         {
-            static int Color = 0;
-
             PAINTSTRUCT PaintStruct;
             RECT ClientRect;
-            HBRUSH Brush;
-            if (Color == 0)
-            {
-                Brush = (HBRUSH)GetStockObject(BLACK_BRUSH);
-                Color = 1;
-            }
-            else
-            {
-                Brush = (HBRUSH)GetStockObject(WHITE_BRUSH);
-                Color = 0;
-            }
-            HDC PaintDC = BeginPaint(WindHandle, &PaintStruct);
             GetClientRect(WindHandle, &ClientRect);
-            FillRect(PaintDC, &ClientRect, Brush);
+            int X = ClientRect.left;
+            int Y = ClientRect.bottom;
+            int Width = ClientRect.right - X;
+            int Height = ClientRect.top - Y;
+            HDC PaintDC = BeginPaint(WindHandle, &PaintStruct);
+            UpdateGameWindow(PaintDC, X, Y, Width, Height);
             EndPaint(WindHandle, &PaintStruct);
             return 0;
         }
