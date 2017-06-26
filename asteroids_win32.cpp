@@ -1,35 +1,69 @@
 #include <windows.h>
+#include <stdint.h>
 
 static BITMAPINFO BitmapInfo;
-static HBITMAP DibSection;
 static void *BitmapMemory;
-static HDC BitmapDeviceContext;
+static int BitmapWidth;
+static int BitmapHeight;
 
 void ResizeDIBSection(int X, int Y, int Width, int Height)
 {
-    if (DibSection)
+
+    if (BitmapMemory)
     {
-        DeleteObject((HGDIOBJ)DibSection);
+        VirtualFree(BitmapMemory, 0, MEM_RELEASE);
     }
 
-    if (!BitmapDeviceContext)
-    {
-        BitmapDeviceContext = CreateCompatibleDC(0);
-    }
+    BitmapWidth = Width;
+    BitmapHeight = Height;
 
     BitmapInfo.bmiHeader.biSize = sizeof(BitmapInfo.bmiHeader);
-    BitmapInfo.bmiHeader.biWidth = Width;
-    BitmapInfo.bmiHeader.biHeight = Height;
+    BitmapInfo.bmiHeader.biWidth = BitmapWidth;
+    BitmapInfo.bmiHeader.biHeight = BitmapHeight;
     BitmapInfo.bmiHeader.biPlanes = 1;
     BitmapInfo.bmiHeader.biBitCount = 32;
     BitmapInfo.bmiHeader.biCompression = BI_RGB;
 
-    DibSection = CreateDIBSection(BitmapDeviceContext, &BitmapInfo, DIB_RGB_COLORS, &BitmapMemory, 0, 0);    
+    int BytesPerPixel = 4; // 4 bytes per pixel to keep dword aligned
+    int BitmapMemorySize = BitmapWidth * BitmapHeight * BytesPerPixel;
+    BitmapMemory = VirtualAlloc(0, BitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
+}
 
+void RenderBitmapData(int Width, int Height)
+{
+    if (!BitmapMemory) return;
+
+    int Pitch = BitmapWidth * 4;
+    uint8_t Red = 0, Green = 200, Blue = 100;
+    uint8_t *Row = (uint8_t *)BitmapMemory;
+    for (int Y = 0; Y < BitmapHeight; ++Y)
+    {
+        uint8_t *Pixel = (uint8_t *)Row;
+        for (int X = 0; X < BitmapWidth; ++X)
+        {
+            //Blue
+            *Pixel = Blue;
+            ++Pixel;
+            
+            //Green
+            *Pixel = Green;
+            ++Pixel;
+            
+            //Red
+            *Pixel = Red;
+            Red = (Red + 20);
+            ++Pixel;
+
+            *Pixel = (uint8_t)0;
+            ++Pixel;
+        }
+        Row += Pitch;
+    }    
 }
 
 void UpdateGameWindow(HDC WindowDC, int X, int Y, int Width, int Height)
-{
+{   
+    RenderBitmapData(Width, Height);
     StretchDIBits(WindowDC, X, Y, Width, Height, X, Y, Width, Height, BitmapMemory, &BitmapInfo, DIB_RGB_COLORS, SRCCOPY);
 }
 
@@ -46,10 +80,6 @@ LRESULT CALLBACK AsteroidsWindowCallback(HWND WindHandle,
     switch (Message)
     {
         // To do: handle all painting, resize, etc.
-        case WM_ACTIVATEAPP:
-        {
-            return 0;            
-        }
         case WM_SIZE:
         {
             RECT ClientRect;
@@ -73,6 +103,11 @@ LRESULT CALLBACK AsteroidsWindowCallback(HWND WindHandle,
             HDC PaintDC = BeginPaint(WindHandle, &PaintStruct);
             UpdateGameWindow(PaintDC, X, Y, Width, Height);
             EndPaint(WindHandle, &PaintStruct);
+            return 0;
+        }
+        case WM_CLOSE: case WM_DESTROY:
+        {
+            PostQuitMessage(0);
             return 0;
         }
         case WM_KEYDOWN:
