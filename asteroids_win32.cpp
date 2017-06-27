@@ -6,6 +6,12 @@ static void *BitmapMemory;
 static int BitmapWidth;
 static int BitmapHeight;
 
+typedef struct __vec2
+{
+    int X;
+    int Y;
+} Vec2;
+
 void ResizeDIBSection(int X, int Y, int Width, int Height)
 {
 
@@ -29,12 +35,10 @@ void ResizeDIBSection(int X, int Y, int Width, int Height)
     BitmapMemory = VirtualAlloc(0, BitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
 }
 
-void RenderBitmapData(int Width, int Height)
+void ClearScreen(int ScreenWidth, int ScreenHeight)
 {
-    if (!BitmapMemory) return;
-
     int Pitch = BitmapWidth * 4;
-    uint8_t Red = 0, Green = 200, Blue = 100;
+    uint8_t Red = 0, Green = 0, Blue = 0;
     uint8_t *Row = (uint8_t *)BitmapMemory;
     for (int Y = 0; Y < BitmapHeight; ++Y)
     {
@@ -51,7 +55,37 @@ void RenderBitmapData(int Width, int Height)
             
             //Red
             *Pixel = Red;
-            Red = (Red + 20);
+            ++Pixel;
+
+            *Pixel = (uint8_t)0;
+            ++Pixel;
+        }
+        Row += Pitch;
+    }
+}
+
+void DrawBitmapData(int Width, int Height)
+{
+    if (!BitmapMemory) return;
+
+    int Pitch = BitmapWidth * 4;
+    uint8_t Red = 0, Green = 0, Blue = 0;
+    uint8_t *Row = (uint8_t *)BitmapMemory;
+    for (int Y = 0; Y < BitmapHeight; ++Y)
+    {
+        uint8_t *Pixel = (uint8_t *)Row;
+        for (int X = 0; X < BitmapWidth; ++X)
+        {
+            //Blue
+            *Pixel = Blue;
+            ++Pixel;
+            
+            //Green
+            *Pixel = Green;
+            ++Pixel;
+            
+            //Red
+            *Pixel = Red;
             ++Pixel;
 
             *Pixel = (uint8_t)0;
@@ -61,9 +95,54 @@ void RenderBitmapData(int Width, int Height)
     }    
 }
 
+void DrawRectangle(Vec2 *TL, Vec2 *BR)
+{
+    if (!BitmapMemory) return;
+
+    int Pitch = BitmapWidth * 4;
+    uint8_t Red = 255, Green = 255, Blue = 255;
+    uint8_t *Row = (uint8_t *)BitmapMemory;
+    for (int Y = 0; Y < BitmapHeight; ++Y)
+    {
+        uint8_t *Pixel = (uint8_t *)Row;
+        for (int X = 0; X < BitmapWidth; ++X)
+        {
+            if (((Y == TL->Y || Y == BR->Y) && X >= TL->X && X <= BR->X) || ((X == TL->X || X == BR->X) && Y <= TL->Y && Y >= BR->Y)) 
+            {
+                //Blue
+                *Pixel = Blue;
+                ++Pixel;
+            
+                //Green
+                *Pixel = Green;
+                ++Pixel;
+            
+                //Red
+                *Pixel = Red;
+                ++Pixel;
+
+                *Pixel = (uint8_t)0;
+                ++Pixel;
+            }
+			else
+			{
+				Pixel += 4;
+			}
+        }
+        Row += Pitch;
+    }
+}
+
 void UpdateGameWindow(HDC WindowDC, int X, int Y, int Width, int Height)
 {   
-    RenderBitmapData(Width, Height);
+    ClearScreen(Width, Height);
+    //DrawBitmapData(Width, Height);
+    Vec2 TopLeft, BotRight;
+    TopLeft.X = 300;
+    TopLeft.Y = 300;
+    BotRight.X = 500;
+    BotRight.Y = 200;
+    DrawRectangle(&TopLeft, &BotRight);
     StretchDIBits(WindowDC, X, Y, Width, Height, X, Y, Width, Height, BitmapMemory, &BitmapInfo, DIB_RGB_COLORS, SRCCOPY);
 }
 
