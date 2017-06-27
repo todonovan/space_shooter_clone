@@ -10,40 +10,40 @@ typedef struct tagBitmapData {
   void *BitmapMemory;
 } Win32BitmapData;
 
-static Win32BitmapData *BitmapData;
+static Win32BitmapData BitmapData;
 
-void ResizeDIBSection(int X, int Y, int Width, int Height, Win32BitmapData *BitmapData)
+void ResizeDIBSection(int X, int Y, int Width, int Height)
 {
-    if (BitmapData->BitmapMemory)
+    if (BitmapData.BitmapMemory)
     {
-        VirtualFree(BitmapData->BitmapMemory, 0, MEM_RELEASE);
+        VirtualFree(BitmapData.BitmapMemory, 0, MEM_RELEASE);
     }
 
-    BitmapData->Width = Width;
-    BitmapData->Height = Height;
+    BitmapData.Width = Width;
+    BitmapData.Height = Height;
 
-    BitmapData->BitmapInfo.bmiHeader.biSize = sizeof(BitmapData->BitmapInfo.bmiHeader);
-    BitmapData->BitmapInfo.bmiHeader.biWidth = BitmapData->Width;
-    BitmapData->BitmapInfo.bmiHeader.biHeight = BitmapData->Height;
-    BitmapData->BitmapInfo.bmiHeader.biPlanes = 1; // Magic number mandated by win32 documentation
-    BitmapData->BitmapInfo.bmiHeader.biBitCount = BitmapData->BytesPerPixel * 8;
-    BitmapData->BitmapInfo.bmiHeader.biCompression = BI_RGB;
+    BitmapData.BitmapInfo.bmiHeader.biSize = sizeof(BitmapData.BitmapInfo.bmiHeader);
+    BitmapData.BitmapInfo.bmiHeader.biWidth = BitmapData.Width;
+    BitmapData.BitmapInfo.bmiHeader.biHeight = BitmapData.Height;
+    BitmapData.BitmapInfo.bmiHeader.biPlanes = 1; // Magic number mandated by win32 documentation
+    BitmapData.BitmapInfo.bmiHeader.biBitCount = BitmapData.BytesPerPixel * 8;
+    BitmapData.BitmapInfo.bmiHeader.biCompression = BI_RGB;
 
-    BitmapData->BitmapMemorySize = BitmapData->Width * BitmapData->Height * BitmapData->BytesPerPixel;
-    BitmapMemory = VirtualAlloc(0, BitmapData->BitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
+    BitmapData.BitmapMemorySize = BitmapData.Width * BitmapData.Height * BitmapData.BytesPerPixel;
+    BitmapData.BitmapMemory = VirtualAlloc(0, BitmapData.BitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
 }
 
-void RenderBitmapData(int Width, int Height, Win32BitmapData *BitmapData)
+void RenderBitmapData(int Width, int Height)
 {
-    if (!BitmapMemory) return;
+    if (!BitmapData.BitmapMemory) return;
 
-    int Pitch = BitmapData->Width * 4; // 4 bytes per pixel although not sure I can guarantee that this will always be true..??
+    int Pitch = BitmapData.Width * 4; // 4 bytes per pixel although not sure I can guarantee that this will always be true..??
     uint8_t Red = 0, Green = 200, Blue = 100;
-    uint8_t *Row = (uint8_t *)BitmapData->BitmapMemory;
-    for (int Y = 0; Y < BitmapData->Height; ++Y)
+    uint8_t *Row = (uint8_t *)BitmapData.BitmapMemory;
+    for (int Y = 0; Y < BitmapData.Height; ++Y)
     {
         uint8_t *Pixel = (uint8_t *)Row;
-        for (int X = 0; X < BitmapData->Width; ++X)
+        for (int X = 0; X < BitmapData.Width; ++X)
         {
             //Blue
             *Pixel = Blue;
@@ -65,10 +65,10 @@ void RenderBitmapData(int Width, int Height, Win32BitmapData *BitmapData)
     }    
 }
 
-void UpdateGameWindow(HDC WindowDC, int X, int Y, int Width, int Height, Win32BitmapData *BitmapData)
+void UpdateGameWindow(HDC WindowDC, int X, int Y, int Width, int Height)
 {   
-    RenderBitmapData(Width, Height, BitmapData);
-    StretchDIBits(WindowDC, X, Y, Width, Height, X, Y, Width, Height, BitmapData->BitmapMemory, &(BitmapData->BitmapInfo), DIB_RGB_COLORS, SRCCOPY);
+    RenderBitmapData(Width, Height);
+    StretchDIBits(WindowDC, X, Y, Width, Height, X, Y, Width, Height, BitmapData.BitmapMemory, &(BitmapData.BitmapInfo), DIB_RGB_COLORS, SRCCOPY);
 }
 
 /* The main callback for our window. This function will handle all
@@ -81,10 +81,9 @@ LRESULT CALLBACK AsteroidsWindowCallback(HWND WindHandle,
 {
     LRESULT Result = 0;
 
-    if (!BitmapData)
+    if (!BitmapData.BitmapMemory)
     {
-        Win32BitmapData bmpd = {};
-        BitmapData = &bmpd;
+        BitmapData = {};
     }
 
     switch (Message)
@@ -98,7 +97,7 @@ LRESULT CALLBACK AsteroidsWindowCallback(HWND WindHandle,
             int Y = ClientRect.right;
             int Width = ClientRect.right - ClientRect.left;
             int Height = ClientRect.bottom - ClientRect.top; // Negative to ensure top-down DIB
-            ResizeDIBSection(X, Y, Width, Height, BitmapData);
+            ResizeDIBSection(X, Y, Width, Height);
             return 0;
         }
         case WM_PAINT:
