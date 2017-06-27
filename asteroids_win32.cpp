@@ -1,45 +1,49 @@
 #include <windows.h>
 #include <stdint.h>
 
-static BITMAPINFO BitmapInfo;
-static void *BitmapMemory;
-static int BitmapWidth;
-static int BitmapHeight;
+typedef struct tagBitmapData {
+  int Width;
+  int Height;
+  int BytesPerPixel;
+  int BitmapMemorySize;
+  BITMAPINFO BitmapInfo;
+  void *BitmapMemory;
+} Win32BitmapData;
 
-void ResizeDIBSection(int X, int Y, int Width, int Height)
+static Win32BitmapData *BitmapData;
+
+void ResizeDIBSection(int X, int Y, int Width, int Height, Win32BitmapData *BitmapData)
 {
-
-    if (BitmapMemory)
+    if (BitmapData->BitmapMemory)
     {
-        VirtualFree(BitmapMemory, 0, MEM_RELEASE);
+        VirtualFree(BitmapData->BitmapMemory, 0, MEM_RELEASE);
     }
 
-    BitmapWidth = Width;
-    BitmapHeight = Height;
+    BitmapData->Width = Width;
+    BitmapData->Height = Height;
 
-    BitmapInfo.bmiHeader.biSize = sizeof(BitmapInfo.bmiHeader);
-    BitmapInfo.bmiHeader.biWidth = BitmapWidth;
-    BitmapInfo.bmiHeader.biHeight = BitmapHeight;
-    BitmapInfo.bmiHeader.biPlanes = 1;
-    BitmapInfo.bmiHeader.biBitCount = 32;
-    BitmapInfo.bmiHeader.biCompression = BI_RGB;
+    BitmapData->BitmapInfo.bmiHeader.biSize = sizeof(BitmapData->BitmapInfo.bmiHeader);
+    BitmapData->BitmapInfo.bmiHeader.biWidth = BitmapData->Width;
+    BitmapData->BitmapInfo.bmiHeader.biHeight = BitmapData->Height;
+    BitmapData->BitmapInfo.bmiHeader.biPlanes = 1; // Magic number mandated by win32 documentation
+    BitmapData->BitmapInfo.bmiHeader.biBitCount = BitmapData->BytesPerPixel * 8;
+    BitmapData->BitmapInfo.bmiHeader.biCompression = BI_RGB;
 
-    int BytesPerPixel = 4; // 4 bytes per pixel to keep dword aligned
-    int BitmapMemorySize = BitmapWidth * BitmapHeight * BytesPerPixel;
-    BitmapMemory = VirtualAlloc(0, BitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
+    BitmapData->BitmapMemorySize = BitmapData->Width * BitmapData->Height * BitmapData->BytesPerPixel;
+    BitmapMemory = VirtualAlloc(0, BitmapData->BitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
 }
 
-void RenderBitmapData(int Width, int Height)
+void RenderBitmapData(int Width, int Height, Win32BitmapData *BitmapData)
 {
     if (!BitmapMemory) return;
 
-    int Pitch = BitmapWidth * 4;
+    int Pitch = BitmapData->Width * 4; // 4 bytes per pixel although not sure I can guarantee that this will always be true..??
     uint8_t Red = 0, Green = 200, Blue = 100;
-    uint8_t *Row = (uint8_t *)BitmapMemory;
-    for (int Y = 0; Y < BitmapHeight; ++Y)
+    uint8_t *Row = (uint8_t *)BitmapData->BitmapMemory;
+    for (int Y = 0; Y < BitmapData->Height; ++Y)
     {
         uint8_t *Pixel = (uint8_t *)Row;
-        for (int X = 0; X < BitmapWidth; ++X)
+        for (int X = 0; X < BitmapData->Width; ++X)
         {
             //Blue
             *Pixel = Blue;
@@ -61,10 +65,10 @@ void RenderBitmapData(int Width, int Height)
     }    
 }
 
-void UpdateGameWindow(HDC WindowDC, int X, int Y, int Width, int Height)
+void UpdateGameWindow(HDC WindowDC, int X, int Y, int Width, int Height, Win32BitmapData *BitmapData)
 {   
-    RenderBitmapData(Width, Height);
-    StretchDIBits(WindowDC, X, Y, Width, Height, X, Y, Width, Height, BitmapMemory, &BitmapInfo, DIB_RGB_COLORS, SRCCOPY);
+    RenderBitmapData(Width, Height, BitmapData);
+    StretchDIBits(WindowDC, X, Y, Width, Height, X, Y, Width, Height, BitmapData->BitmapMemory, &(BitmapData->BitmapInfo), DIB_RGB_COLORS, SRCCOPY);
 }
 
 /* The main callback for our window. This function will handle all
@@ -77,6 +81,12 @@ LRESULT CALLBACK AsteroidsWindowCallback(HWND WindHandle,
 {
     LRESULT Result = 0;
 
+    if (!BitmapData)
+    {
+        Win32BitmapData bmpd = {};
+        BitmapData = &bmpd;
+    }
+
     switch (Message)
     {
         // To do: handle all painting, resize, etc.
@@ -88,7 +98,7 @@ LRESULT CALLBACK AsteroidsWindowCallback(HWND WindHandle,
             int Y = ClientRect.right;
             int Width = ClientRect.right - ClientRect.left;
             int Height = ClientRect.bottom - ClientRect.top; // Negative to ensure top-down DIB
-            ResizeDIBSection(X, Y, Width, Height);
+            ResizeDIBSection(X, Y, Width, Height, BitmapData);
             return 0;
         }
         case WM_PAINT:
@@ -141,7 +151,7 @@ int CALLBACK WinMain(HINSTANCE Instance,
                      LPSTR CommandLine,
                      int CommandShow)
 {
-    WNDCLASS WindowClass = {}; // Ensure the struct is zeroed.
+    WNDCLASS WindowClass = {};
     WindowClass.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
     WindowClass.lpfnWndProc = &AsteroidsWindowCallback;
     WindowClass.hInstance = Instance;
