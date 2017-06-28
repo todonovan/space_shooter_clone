@@ -36,7 +36,7 @@ void SetPixelInBuffer(Vec2 *Coords, ColorTriple *Colors)
 }
 
 /// TODO!! Restore the actual width capabilities (e.g., reducing brightness incrementally further away pixel is from center of line)
-void DrawLineWidth(Vec2 *Point1, Vec2 *Point2)
+void DrawLineWidth(Vec2 *Point1, Vec2 *Point2, ColorTriple *Color)
 { 
     int x0 = Point1->X;
     int x1 = Point2->X;
@@ -47,18 +47,14 @@ void DrawLineWidth(Vec2 *Point1, Vec2 *Point2)
     int dy = abs(y1-y0), sy = y0 < y1 ? 1 : -1; 
     int err = dx-dy, e2, x2, y2;  
     float ed = dx+dy == 0 ? 1 : sqrt((float)dx*dx+(float)dy*dy);
-    
-    ColorTriple White;
-    White.Red = 255;
-    White.Green = 255;
-    White.Blue = 255;
+
 
     for (wd = (wd+1)/2; ; )
     {                                   
         Vec2 Coords;
         Coords.X = x0;
         Coords.Y = y0;
-        SetPixelInBuffer(&Coords, &White);
+        SetPixelInBuffer(&Coords, Color);
         e2 = err; x2 = x0;
         if (2*e2 >= -dx)
         {
@@ -68,7 +64,7 @@ void DrawLineWidth(Vec2 *Point1, Vec2 *Point2)
                 Coords2.X = x0;
                 Coords2.Y = y2 += sy;
                 
-                SetPixelInBuffer(&Coords2, &White);
+                SetPixelInBuffer(&Coords2, Color);
             }            
             if (x0 == x1) break;
             e2 = err; err -= dy; x0 += sx; 
@@ -80,7 +76,7 @@ void DrawLineWidth(Vec2 *Point1, Vec2 *Point2)
                 Vec2 Coords2;
                 Coords2.X = x2 += sx;
                 Coords2.Y = y0;
-                SetPixelInBuffer(&Coords2, &White);
+                SetPixelInBuffer(&Coords2, Color);
             }
             if (y0 == y1) break;
             err += dx; y0 += sy; 
@@ -116,53 +112,24 @@ void ClearScreen(HDC DC, RECT *WinRect)
     FillRect(DC, WinRect, BlackBrush);
 }
 
-void DrawBitmapData(int Width, int Height)
+void DrawQuad(Vec2 *TL, Vec2 *BR, ColorTriple *Color)
 {
     if (!BitmapMemory) return;
-
-    int Pitch = BitmapWidth * 4;
-    uint8_t Red = 0, Green = 0, Blue = 0;
-    uint8_t *Row = (uint8_t *)BitmapMemory;
-    for (int Y = 0; Y < BitmapHeight; ++Y)
-    {
-        uint8_t *Pixel = (uint8_t *)Row;
-        for (int X = 0; X < BitmapWidth; ++X)
-        {
-            //Blue
-            *Pixel = Blue;
-            ++Pixel;
-            
-            //Green
-            *Pixel = Green;
-            ++Pixel;
-            
-            //Red
-            *Pixel = Red;
-            ++Pixel;
-
-            *Pixel = (uint8_t)0;
-            ++Pixel;
-        }
-        Row += Pitch;
-    }    
-}
-
-void DrawRectangle(Vec2 *TL, Vec2 *BR)
-{
-    if (!BitmapMemory) return;
-    /*  p0----p1   /
+    
+	/*  p0----p1   /
     /*  |     |    /
     /*  |     |    /
     /*  p2----p3  */
+
     Vec2 P0, P1, P2, P3;
     P0.X = TL->X, P0.Y = TL->Y;
-    P1.X = BR->X+200, P1.Y = TL->Y-50;
-    P2.X = TL->X-50, P2.Y = BR->Y+43;
-    P3.X = BR->X+75, P3.Y = BR->Y;
-    DrawLineWidth(&P0, &P1);
-    DrawLineWidth(&P1, &P3);
-    DrawLineWidth(&P3, &P2);
-    DrawLineWidth(&P2, &P0);
+    P1.X = BR->X+100, P1.Y = TL->Y;
+    P2.X = TL->X-50, P2.Y = BR->Y+200;
+    P3.X = BR->X+75, P3.Y = BR->Y+250;
+    DrawLineWidth(&P0, &P1, Color);
+    DrawLineWidth(&P1, &P3, Color);
+    DrawLineWidth(&P3, &P2, Color);
+    DrawLineWidth(&P2, &P0, Color);
 
     /*int Pitch = BitmapWidth * 4;
     uint8_t Red = 255, Green = 255, Blue = 255;
@@ -208,10 +175,10 @@ void UpdateGameWindow(HDC WindowDC, RECT *WindowRect, int X, int Y, int Width, i
     BotRight.X = 500;
     BotRight.Y = 200;
     ColorTriple Colors;
-    Colors.Red = 50;
-    Colors.Blue = 75;
-    Colors.Green = 100;
-    DrawRectangle(&TopLeft, &BotRight);
+    Colors.Red = 255;
+    Colors.Blue = 0;
+    Colors.Green = 0;
+    DrawQuad(&TopLeft, &BotRight, &Colors);
     StretchDIBits(WindowDC, X, Y, Width, Height, X, Y, Width, Height, BitmapMemory, &BitmapInfo, DIB_RGB_COLORS, SRCCOPY);
 }
 
