@@ -1,16 +1,92 @@
 #include <windows.h>
 #include <stdint.h>
+#include <math.h>
 
 static BITMAPINFO BitmapInfo;
 static void *BitmapMemory;
 static int BitmapWidth;
 static int BitmapHeight;
+static HBRUSH BlackBrush;
+static float LineWidth;
 
 typedef struct __vec2
 {
     int X;
     int Y;
 } Vec2;
+
+typedef struct __colorTriple
+{
+    uint8_t Red;
+    uint8_t Blue;
+    uint8_t Green;
+} ColorTriple;
+
+
+void SetPixelInBuffer(Vec2 *Coords, ColorTriple *Colors)
+{
+    if (!BitmapMemory) return;
+    uint8_t *Pixel = (uint8_t *)((char *)BitmapMemory + (Coords->Y * BitmapWidth * 4) + (Coords->X * 4));
+
+    *Pixel = Colors->Blue;
+    Pixel++;
+    *Pixel = Colors->Green;
+    Pixel++;
+    *Pixel = Colors->Red;
+}
+
+/// TODO!! Restore the actual width capabilities (e.g., reducing brightness incrementally further away pixel is from center of line)
+void DrawLineWidth(Vec2 *Point1, Vec2 *Point2)
+{ 
+    int x0 = Point1->X;
+    int x1 = Point2->X;
+    int y0 = Point1->Y;
+    int y1 = Point2->Y;
+    float wd = LineWidth;
+    int dx = abs(x1-x0), sx = x0 < x1 ? 1 : -1; 
+    int dy = abs(y1-y0), sy = y0 < y1 ? 1 : -1; 
+    int err = dx-dy, e2, x2, y2;  
+    float ed = dx+dy == 0 ? 1 : sqrt((float)dx*dx+(float)dy*dy);
+    
+    ColorTriple White;
+    White.Red = 255;
+    White.Green = 255;
+    White.Blue = 255;
+
+    for (wd = (wd+1)/2; ; )
+    {                                   
+        Vec2 Coords;
+        Coords.X = x0;
+        Coords.Y = y0;
+        SetPixelInBuffer(&Coords, &White);
+        e2 = err; x2 = x0;
+        if (2*e2 >= -dx)
+        {
+            for (e2 += dy, y2 = y0; e2 < ed*wd && (y1 != y2 || dx > dy); e2 += dx)
+            {
+                Vec2 Coords2;
+                Coords2.X = x0;
+                Coords2.Y = y2 += sy;
+                
+                SetPixelInBuffer(&Coords2, &White);
+            }            
+            if (x0 == x1) break;
+            e2 = err; err -= dy; x0 += sx; 
+        } 
+        if (2*e2 <= dy)
+        {
+            for (e2 = dx-e2; e2 < ed*wd && (x1 != x2 || dx < dy); e2 += dy)
+            {
+                Vec2 Coords2;
+                Coords2.X = x2 += sx;
+                Coords2.Y = y0;
+                SetPixelInBuffer(&Coords2, &White);
+            }
+            if (y0 == y1) break;
+            err += dx; y0 += sy; 
+        }
+    }
+}
 
 void ResizeDIBSection(int X, int Y, int Width, int Height)
 {
@@ -35,33 +111,9 @@ void ResizeDIBSection(int X, int Y, int Width, int Height)
     BitmapMemory = VirtualAlloc(0, BitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
 }
 
-void ClearScreen(int ScreenWidth, int ScreenHeight)
+void ClearScreen(HDC DC, RECT *WinRect)
 {
-    int Pitch = BitmapWidth * 4;
-    uint8_t Red = 0, Green = 0, Blue = 0;
-    uint8_t *Row = (uint8_t *)BitmapMemory;
-    for (int Y = 0; Y < BitmapHeight; ++Y)
-    {
-        uint8_t *Pixel = (uint8_t *)Row;
-        for (int X = 0; X < BitmapWidth; ++X)
-        {
-            //Blue
-            *Pixel = Blue;
-            ++Pixel;
-            
-            //Green
-            *Pixel = Green;
-            ++Pixel;
-            
-            //Red
-            *Pixel = Red;
-            ++Pixel;
-
-            *Pixel = (uint8_t)0;
-            ++Pixel;
-        }
-        Row += Pitch;
-    }
+    FillRect(DC, WinRect, BlackBrush);
 }
 
 void DrawBitmapData(int Width, int Height)
@@ -98,8 +150,21 @@ void DrawBitmapData(int Width, int Height)
 void DrawRectangle(Vec2 *TL, Vec2 *BR)
 {
     if (!BitmapMemory) return;
+    /*  p0----p1   /
+    /*  |     |    /
+    /*  |     |    /
+    /*  p2----p3  */
+    Vec2 P0, P1, P2, P3;
+    P0.X = TL->X, P0.Y = TL->Y;
+    P1.X = BR->X+200, P1.Y = TL->Y-50;
+    P2.X = TL->X-50, P2.Y = BR->Y+43;
+    P3.X = BR->X+75, P3.Y = BR->Y;
+    DrawLineWidth(&P0, &P1);
+    DrawLineWidth(&P1, &P3);
+    DrawLineWidth(&P3, &P2);
+    DrawLineWidth(&P2, &P0);
 
-    int Pitch = BitmapWidth * 4;
+    /*int Pitch = BitmapWidth * 4;
     uint8_t Red = 255, Green = 255, Blue = 255;
     uint8_t *Row = (uint8_t *)BitmapMemory;
     for (int Y = 0; Y < BitmapHeight; ++Y)
@@ -130,18 +195,22 @@ void DrawRectangle(Vec2 *TL, Vec2 *BR)
 			}
         }
         Row += Pitch;
-    }
+    }*/
 }
 
-void UpdateGameWindow(HDC WindowDC, int X, int Y, int Width, int Height)
+void UpdateGameWindow(HDC WindowDC, RECT *WindowRect, int X, int Y, int Width, int Height)
 {   
-    ClearScreen(Width, Height);
+    ClearScreen(WindowDC, WindowRect);
     //DrawBitmapData(Width, Height);
     Vec2 TopLeft, BotRight;
     TopLeft.X = 300;
     TopLeft.Y = 300;
     BotRight.X = 500;
     BotRight.Y = 200;
+    ColorTriple Colors;
+    Colors.Red = 50;
+    Colors.Blue = 75;
+    Colors.Green = 100;
     DrawRectangle(&TopLeft, &BotRight);
     StretchDIBits(WindowDC, X, Y, Width, Height, X, Y, Width, Height, BitmapMemory, &BitmapInfo, DIB_RGB_COLORS, SRCCOPY);
 }
@@ -180,7 +249,7 @@ LRESULT CALLBACK AsteroidsWindowCallback(HWND WindHandle,
             int Width = ClientRect.right - X;
             int Height = ClientRect.top - Y;
             HDC PaintDC = BeginPaint(WindHandle, &PaintStruct);
-            UpdateGameWindow(PaintDC, X, Y, Width, Height);
+            UpdateGameWindow(PaintDC, &ClientRect, X, Y, Width, Height);
             EndPaint(WindHandle, &PaintStruct);
             return 0;
         }
@@ -234,6 +303,8 @@ int CALLBACK WinMain(HINSTANCE Instance,
 
         if (WindowHandle)
         {
+            BlackBrush = CreateSolidBrush(RGB(0,0,0));
+            LineWidth = 3.0f;
             for (;;)
             {
                 MSG Message;
