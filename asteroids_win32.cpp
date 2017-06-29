@@ -112,24 +112,20 @@ void ClearScreen(HDC DC, RECT *WinRect)
     FillRect(DC, WinRect, BlackBrush);
 }
 
-void DrawQuad(Vec2 *TL, Vec2 *BR, ColorTriple *Color)
+void DrawPolygon(Vec2 *CoordArray, int NumVertices, ColorTriple *Color)
 {
     if (!BitmapMemory) return;
-    
-	/*  p0----p1   /
-    /*  |     |    /
-    /*  |     |    /
-    /*  p2----p3  */
+    if (NumVertices < 3) return;
 
-    Vec2 P0, P1, P2, P3;
-    P0.X = TL->X, P0.Y = TL->Y;
-    P1.X = BR->X+100, P1.Y = TL->Y;
-    P2.X = TL->X-50, P2.Y = BR->Y+200;
-    P3.X = BR->X+75, P3.Y = BR->Y+250;
-    DrawLineWidth(&P0, &P1, Color);
-    DrawLineWidth(&P1, &P3, Color);
-    DrawLineWidth(&P3, &P2, Color);
-    DrawLineWidth(&P2, &P0, Color);
+    int cur = 0, next = 1;
+
+    for (int i = 0; i < NumVertices-1; ++i)
+    {
+        DrawLineWidth(&CoordArray[cur], &CoordArray[next], Color);
+        ++cur;
+        if (i < NumVertices - 2) ++next;
+    }
+    DrawLineWidth(&CoordArray[cur], &CoordArray[0], Color);
 
     /*int Pitch = BitmapWidth * 4;
     uint8_t Red = 255, Green = 255, Blue = 255;
@@ -169,16 +165,18 @@ void UpdateGameWindow(HDC WindowDC, RECT *WindowRect, int X, int Y, int Width, i
 {   
     ClearScreen(WindowDC, WindowRect);
     //DrawBitmapData(Width, Height);
-    Vec2 TopLeft, BotRight;
-    TopLeft.X = 300;
-    TopLeft.Y = 300;
-    BotRight.X = 500;
-    BotRight.Y = 200;
-    ColorTriple Colors;
-    Colors.Red = 255;
-    Colors.Blue = 0;
-    Colors.Green = 0;
-    DrawQuad(&TopLeft, &BotRight, &Colors);
+    Vec2 TopLeft, TopRight, BottomRight, BottomLeft, More, More1;
+    TopLeft.X = 100, TopLeft.Y = 200;
+    TopRight.X = 300, TopRight.Y = 200;
+    BottomRight.X = 300, BottomRight.Y = 30;
+    BottomLeft.X = 100, BottomLeft.Y = 30;
+    More.X = 150, More.Y = 72;
+    More1.X = 220, More1.Y = 180;
+    Vec2 ShapeVertices[6];
+    ShapeVertices[0] = TopLeft, ShapeVertices[1] = TopRight, ShapeVertices[2] = BottomRight, ShapeVertices[3] = BottomLeft, ShapeVertices[4] = More, ShapeVertices[5] = More1;
+    ColorTriple Color;
+    Color.Red = 150, Color.Blue = 100, Color.Green = 100;
+    DrawPolygon(ShapeVertices, 6, &Color);
     StretchDIBits(WindowDC, X, Y, Width, Height, X, Y, Width, Height, BitmapMemory, &BitmapInfo, DIB_RGB_COLORS, SRCCOPY);
 }
 
@@ -275,16 +273,16 @@ int CALLBACK WinMain(HINSTANCE Instance,
             for (;;)
             {
                 MSG Message;
-                BOOL MessageResult = GetMessage(&Message, 0, 0, 0);
-                if (MessageResult > 0)
+                while (PeekMessage(&Message, 0, 0, 0, PM_REMOVE))
                 {
+                    if (Message.message == WM_QUIT)
+                    {
+                        return 0;
+                    }
                     TranslateMessage(&Message);
                     DispatchMessage(&Message);
                 }
-                else
-                {
-                    break;
-                }
+                // TODO:: Game loop here
             }
         }
     }   
