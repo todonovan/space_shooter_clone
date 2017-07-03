@@ -1,6 +1,8 @@
 #include <windows.h>
 #include <stdint.h>
 #include <math.h>
+#include <xinput.h>
+#include <stdexcept>
 
 static BITMAPINFO BitmapInfo;
 static void *BitmapMemory;
@@ -9,18 +11,39 @@ static int BitmapHeight;
 static HBRUSH BlackBrush;
 static float LineWidth;
 
-typedef struct __vec2
+#include "asteroids.cpp"
+
+struct Vec2
 {
     int X;
     int Y;
-} Vec2;
+};
 
-typedef struct __colorTriple
+struct ColorTriple
 {
     uint8_t Red;
     uint8_t Blue;
     uint8_t Green;
-} ColorTriple;
+};
+
+struct PlayerControlInput
+{
+    bool MoveUp;
+    bool MoveDown;
+    bool MoveRight;
+    bool MoveLeft;
+    bool A_Pressed;
+    bool B_Pressed;
+    bool Start_Pressed;
+};
+
+struct PlayerModel
+{
+    Vec2 Vertices[3];
+    ColorTriple Color;
+};
+
+static PlayerModel Player;
 
 
 void SetPixelInBuffer(Vec2 *Coords, ColorTriple *Colors)
@@ -84,7 +107,7 @@ void DrawLineWidth(Vec2 *Point1, Vec2 *Point2, ColorTriple *Color)
     }
 }
 
-void ResizeDIBSection(int X, int Y, int Width, int Height)
+void ResizeDIBSection(int Width, int Height)
 {
 
     if (BitmapMemory)
@@ -107,9 +130,9 @@ void ResizeDIBSection(int X, int Y, int Width, int Height)
     BitmapMemory = VirtualAlloc(0, BitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
 }
 
-void ClearScreen(HDC DC, RECT *WinRect)
+void ClearBuffer()
 {
-    FillRect(DC, WinRect, BlackBrush);
+	ZeroMemory(BitmapMemory, BitmapHeight * BitmapWidth * 4);
 }
 
 void DrawPolygon(Vec2 *CoordArray, int NumVertices, ColorTriple *Color)
@@ -126,58 +149,102 @@ void DrawPolygon(Vec2 *CoordArray, int NumVertices, ColorTriple *Color)
         if (i < NumVertices - 2) ++next;
     }
     DrawLineWidth(&CoordArray[cur], &CoordArray[0], Color);
-
-    /*int Pitch = BitmapWidth * 4;
-    uint8_t Red = 255, Green = 255, Blue = 255;
-    uint8_t *Row = (uint8_t *)BitmapMemory;
-    for (int Y = 0; Y < BitmapHeight; ++Y)
-    {
-        uint8_t *Pixel = (uint8_t *)Row;
-        for (int X = 0; X < BitmapWidth; ++X)
-        {
-            if (((Y == TL->Y || Y == BR->Y) && X >= TL->X && X <= BR->X) || ((X == TL->X || X == BR->X) && Y <= TL->Y && Y >= BR->Y)) 
-            {
-                //Blue
-                *Pixel = Blue;
-                ++Pixel;
-            
-                //Green
-                *Pixel = Green;
-                ++Pixel;
-            
-                //Red
-                *Pixel = Red;
-                ++Pixel;
-
-                *Pixel = (uint8_t)0;
-                ++Pixel;
-            }
-			else
-			{
-				Pixel += 4;
-			}
-        }
-        Row += Pitch;
-    }*/
 }
 
-void UpdateGameWindow(HDC WindowDC, RECT *WindowRect, int X, int Y, int Width, int Height)
+void DrawToWindow(HDC WindowDC, RECT *WindowRect, int Width, int Height)
 {   
-    ClearScreen(WindowDC, WindowRect);
-    //DrawBitmapData(Width, Height);
-    Vec2 TopLeft, TopRight, BottomRight, BottomLeft, More, More1;
-    TopLeft.X = 100, TopLeft.Y = 200;
-    TopRight.X = 300, TopRight.Y = 200;
-    BottomRight.X = 300, BottomRight.Y = 30;
-    BottomLeft.X = 100, BottomLeft.Y = 30;
-    More.X = 150, More.Y = 72;
-    More1.X = 220, More1.Y = 180;
-    Vec2 ShapeVertices[6];
-    ShapeVertices[0] = TopLeft, ShapeVertices[1] = TopRight, ShapeVertices[2] = BottomRight, ShapeVertices[3] = BottomLeft, ShapeVertices[4] = More, ShapeVertices[5] = More1;
-    ColorTriple Color;
-    Color.Red = 150, Color.Blue = 100, Color.Green = 100;
-    DrawPolygon(ShapeVertices, 6, &Color);
-    StretchDIBits(WindowDC, X, Y, Width, Height, X, Y, Width, Height, BitmapMemory, &BitmapInfo, DIB_RGB_COLORS, SRCCOPY);
+    ClearBuffer();
+    DrawPolygon(Player.Vertices, 3, &(Player.Color));
+    StretchDIBits(WindowDC, 0, 0, Width, Height, 0, 0, Width, Height, BitmapMemory, &BitmapInfo, DIB_RGB_COLORS, SRCCOPY);
+}
+
+void RenderGame(HWND WindHandle, HDC WindowDC)
+{
+    RECT ClientRect;
+    GetClientRect(WindHandle, &ClientRect);
+    int Width = ClientRect.right - ClientRect.left, Height = ClientRect.bottom - ClientRect.top;
+    DrawToWindow(WindowDC, &ClientRect, Width, Height);
+}
+
+XINPUT_GAMEPAD GetControllerInput(DWORD ControllerNumber)
+{
+    XINPUT_STATE ControllerState;
+    if (XInputGetState(ControllerNumber, &ControllerState) == ERROR_SUCCESS)
+    {
+        return ControllerState.Gamepad;
+    }
+    else
+    {
+        throw std::runtime_error("Controller not connected");
+    }
+}
+
+void UpdateGameState(XINPUT_GAMEPAD *Controller)
+{
+    PlayerControlInput PlayerInput;
+    PlayerInput.MoveUp = Controller->sThumbLY > 10000 ? true : false;
+    PlayerInput.MoveDown = Controller->sThumbLY < -10000 ? true : false;
+    PlayerInput.MoveRight = Controller->sThumbLX > 10000 ? true : false;
+    PlayerInput.MoveLeft = Controller->sThumbLX < -10000 ? true : false;
+
+    PlayerInput.A_Pressed = (Controller->wButtons & XINPUT_GAMEPAD_A);
+    PlayerInput.B_Pressed = (Controller->wButtons & XINPUT_GAMEPAD_B);
+    PlayerInput.Start_Pressed = (Controller->wButtons & XINPUT_GAMEPAD_START);
+
+    if (PlayerInput.Start_Pressed)
+    {
+        PostQuitMessage(0);
+    }
+    if (PlayerInput.A_Pressed)
+    {
+        Player.Color.Red = 200, Player.Color.Blue = 0;
+    }
+    if (PlayerInput.B_Pressed)
+    {
+        Player.Color.Red = 0, Player.Color.Blue = 200;
+    }
+    if (PlayerInput.MoveUp)
+    {
+        Player.Vertices[0].Y += 1;
+        Player.Vertices[1].Y += 1;
+        Player.Vertices[2].Y += 1;
+    }
+    if (PlayerInput.MoveDown)
+    {
+        Player.Vertices[0].Y -= 1;
+        Player.Vertices[1].Y -= 1;
+        Player.Vertices[2].Y -= 1;
+    }
+    if (PlayerInput.MoveRight)
+    {
+        Player.Vertices[0].X += 1;
+        Player.Vertices[1].X += 1;
+        Player.Vertices[2].X += 1;
+    }
+    if (PlayerInput.MoveLeft)
+    {
+        Player.Vertices[0].X -= 1;
+        Player.Vertices[1].X -= 1;
+        Player.Vertices[2].X -= 1;
+    }
+}
+
+/* As Windows will only ping us when there are messages to send, we
+must set up a game loop outside of the window callback. Each time
+through the WinMain loop, we will handle all Windows-related messages
+first, then enter GameTick(), where our controller state will be
+procured, our game state will be udpated, and the scene will be
+rendered/blitted. WinMain must (eventually) implement the concept of a
+frame rate/time delta, in order to allow for appropriate updates, as
+well as to ensure we don't melt any CPUs. That delta will eventually
+be passed to GameTick(), as well as the required HWND for blitting purposes. */
+void GameTick(HWND WindHandle)
+{
+    XINPUT_GAMEPAD Controller1State = GetControllerInput(0);
+    UpdateGameState(&Controller1State);
+    HDC WindowDC = GetDC(WindHandle);
+    RenderGame(WindHandle, WindowDC);
+    ReleaseDC(WindHandle, WindowDC);
 }
 
 /* The main callback for our window. This function will handle all
@@ -197,26 +264,25 @@ LRESULT CALLBACK AsteroidsWindowCallback(HWND WindHandle,
         {
             RECT ClientRect;
             GetClientRect(WindHandle, &ClientRect);
-            int X = ClientRect.left;
-            int Y = ClientRect.right;
             int Width = ClientRect.right - ClientRect.left;
             int Height = ClientRect.bottom - ClientRect.top; // Negative to ensure top-down DIB
-            ResizeDIBSection(X, Y, Width, Height);
+            ResizeDIBSection(Width, Height);
             return 0;
         }
         case WM_PAINT:
         {
-            PAINTSTRUCT PaintStruct;
-            RECT ClientRect;
-            GetClientRect(WindHandle, &ClientRect);
-            int X = ClientRect.left;
-            int Y = ClientRect.bottom;
-            int Width = ClientRect.right - X;
-            int Height = ClientRect.top - Y;
-            HDC PaintDC = BeginPaint(WindHandle, &PaintStruct);
-            UpdateGameWindow(PaintDC, &ClientRect, X, Y, Width, Height);
-            EndPaint(WindHandle, &PaintStruct);
-            return 0;
+			PAINTSTRUCT PaintStruct;
+			RECT ClientRect;
+			GetClientRect(WindHandle, &ClientRect);
+			HDC PaintDC = BeginPaint(WindHandle, &PaintStruct);
+			int X = PaintStruct.rcPaint.left;
+			int Y = PaintStruct.rcPaint.top;
+			int Width = PaintStruct.rcPaint.right - PaintStruct.rcPaint.left;
+			int Height = PaintStruct.rcPaint.bottom - PaintStruct.rcPaint.top;
+
+			DrawToWindow(PaintDC, &ClientRect, Width, Height);
+			EndPaint(WindHandle, &PaintStruct);
+			return 0;
         }
         case WM_CLOSE: case WM_DESTROY:
         {
@@ -268,8 +334,20 @@ int CALLBACK WinMain(HINSTANCE Instance,
 
         if (WindowHandle)
         {
+            Player = {};
             BlackBrush = CreateSolidBrush(RGB(0,0,0));
             LineWidth = 3.0f;
+            
+            Vec2 PlayerLeft, PlayerTop, PlayerRight;
+            PlayerLeft.X = 100, PlayerLeft.Y = 100;
+            PlayerTop.X = 120, PlayerTop.Y = 130;
+            PlayerRight.X = 140, PlayerRight.Y = 100;
+            Player.Vertices[0] = PlayerLeft, Player.Vertices[1] = PlayerTop, Player.Vertices[2] = PlayerRight;
+
+            ColorTriple PlayerColor;
+            PlayerColor.Red = 100, PlayerColor.Blue = 100, PlayerColor.Green = 100;
+            Player.Color = PlayerColor;
+
             for (;;)
             {
                 MSG Message;
@@ -282,7 +360,8 @@ int CALLBACK WinMain(HINSTANCE Instance,
                     TranslateMessage(&Message);
                     DispatchMessage(&Message);
                 }
-                // TODO:: Game loop here
+                // TODO: Include timedelta/mechanisms for enforcing limited frame rate
+                GameTick(WindowHandle);
             }
         }
     }   
