@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <math.h>
 #include <xinput.h>
+#include <dsound.h>
 #include <stdexcept>
 
 static BITMAPINFO BitmapInfo;
@@ -10,6 +11,7 @@ static int BitmapWidth;
 static int BitmapHeight;
 static HBRUSH BlackBrush;
 static float LineWidth;
+static LPDIRECTSOUNDBUFFER GlobalSecondaryBuffer;
 
 #include "asteroids.cpp"
 
@@ -229,6 +231,49 @@ void UpdateGameState(XINPUT_GAMEPAD *Controller)
     }
 }
 
+void InitDirectSound(HWND Window, int BufferSize, int SamplesPerSecond)
+{
+    LPDIRECTSOUND DirectSound;
+
+    WAVEFORMATEX WaveFormat = {};
+    WaveFormat.wFormatTag = WAVE_FORMAT_PCM;
+    WaveFormat.nChannels = 2;
+    WaveFormat.nSamplesPerSec = SamplesPerSecond;
+    WaveFormat.wBitsPerSample = 16;
+    WaveFormat.nBlockAlign = (WaveFormat.nChannels * WaveFormat.wBitsPerSample) / 8;
+    WaveFormat.nAvgBytesPerSec = WaveFormat.nSamplesPerSec * WaveFormat.nBlockAlign;
+    WaveFormat.cbSize = 0;
+
+    if (SUCCEEDED(DirectSoundCreate(0, &DirectSound, 0)))
+    {
+        DirectSound->SetCooperativeLevel(Window, DSSCL_PRIORITY);
+        
+        // Initialize primary buffer.
+        DSBUFFERDESC PrimaryBufferDesc = {};
+        PrimaryBufferDesc.dwSize = sizeof(PrimaryBufferDesc);
+        PrimaryBufferDesc.dwFlags = DSBCAPS_PRIMARYBUFFER;
+        
+        
+        LPDIRECTSOUNDBUFFER PrimaryBuffer;
+        if (SUCCEEDED(DirectSound->CreateSoundBuffer(&PrimaryBufferDesc, &PrimaryBuffer, 0)))
+        {
+            PrimaryBuffer->SetFormat(&WaveFormat);
+        }
+
+        // Initialize secondary buffer.
+        DSBUFFERDESC SecondaryBufferDesc = {};
+        SecondaryBufferDesc.dwSize = sizeof(SecondaryBufferDesc);
+        SecondaryBufferDesc.dwFlags = 0;
+        SecondaryBufferDesc.dwBufferBytes = BufferSize;
+        SecondaryBufferDesc.lpwfxFormat = &WaveFormat;
+
+        if (SUCCEEDED(DirectSound->CreateSoundBuffer(&SecondaryBufferDesc, &GlobalSecondaryBuffer, 0)))
+        {
+
+        }
+    }
+}
+
 /* As Windows will only ping us when there are messages to send, we
 must set up a game loop outside of the window callback. Each time
 through the WinMain loop, we will handle all Windows-related messages
@@ -347,6 +392,15 @@ int CALLBACK WinMain(HINSTANCE Instance,
             ColorTriple PlayerColor;
             PlayerColor.Red = 100, PlayerColor.Blue = 100, PlayerColor.Green = 100;
             Player.Color = PlayerColor;
+            int Hertz = 256;
+            uint32_t SampleIndex = 0;
+            int BytesPerSample = sizeof(int16_t) * 2;
+            int SamplesPerSecond = 48000;
+            int SecondaryBufferSize = SamplesPerSecond * BytesPerSample;
+            int SquareWavePeriod = SamplesPerSecond/Hertz;
+
+            InitDirectSound(WindowHandle, SecondaryBufferSize, SamplesPerSecond);
+            GlobalSecondaryBuffer->Play(0, 0, DSBPLAY_LOOPING);
 
             for (;;)
             {
@@ -362,6 +416,46 @@ int CALLBACK WinMain(HINSTANCE Instance,
                 }
                 // TODO: Include timedelta/mechanisms for enforcing limited frame rate
                 GameTick(WindowHandle);
+                
+                DWORD PlayCursor, WriteCursor;
+                if (SUCCEEDED(GlobalSecondaryBuffer->GetCurrentPosition(&PlayCursor, &WriteCursor)))
+                {
+                    DWORD NumBytes;
+                    DWORD SampleIndexToLock = (SampleIndex * BytesPerSample) % SecondaryBufferSize;
+                    if (SampleIndexToLock > PlayCursor)
+                    {
+                        NumBytes = SecondaryBufferSize - SampleIndexToLock;
+                        NumBytes += PlayCursor;
+                    }
+                    else
+                    {
+                        NumBytes = PlayCursor - SampleIndexToLock;
+                    }
+                    void *AudioPtr1, *AudioPtr2;
+                    DWORD AudioBytes1, AudioBytes2;
+                
+                    if (SUCCEEDED(GlobalSecondaryBuffer->Lock(SampleIndexToLock, NumBytes, &AudioPtr1, &AudioBytes1, &AudioPtr2, &AudioBytes2, 0)))
+                    {
+                        int16_t *SoundOut = (int16_t *)AudioPtr1;
+                        DWORD AudioRegion1SampleCount = AudioBytes1/BytesPerSample;
+                        DWORD AudioRegion2SampleCount = AudioBytes2/BytesPerSample;
+                        for (DWORD i = 0; i < AudioRegion1SampleCount; ++i)
+                        {
+                            int16_t Sample = ((SampleIndex / (SquareWavePeriod / 2)) % 2) ? 1000 : -1000;
+                            *SoundOut++ = Sample;
+                            *SoundOut++ = Sample;
+                            SampleIndex++;
+                        }
+                        for (DWORD i = 0; i < AudioRegion2SampleCount; ++i)
+                        {   
+                            int16_t Sample = ((SampleIndex / (SquareWavePeriod / 2)) % 2) ? 1000 : -1000;
+                            *SoundOut++ = Sample;
+                            *SoundOut++ = Sample;
+                            SampleIndex++;
+                        }
+                    }
+                    GlobalSecondaryBuffer->Unlock(AudioPtr1, AudioBytes1, AudioPtr2, AudioBytes2);
+                }
             }
         }
     }   
