@@ -45,12 +45,23 @@ struct PlayerModel
     ColorTriple Color;
 };
 
-static PlayerModel Player;
+struct PlayerObject
+{
+    PlayerModel *Model;
+    float X_Momentum;
+    float Y_Momentum;
+    Vec2 Midpoint;
+};
+
+static PlayerObject Player;
 
 
-void SetPixelInBuffer(Vec2 *Coords, ColorTriple *Colors)
+void SetPixelInBuffer(Vec2 *Coords, ColorTriple *Colors, int WindowWidth, int WindowHeight)
 {
     if (!BitmapMemory) return;
+    Coords->X = (Coords->X < 0) ? (Coords->X + WindowWidth) : (Coords->X % WindowWidth);
+    Coords->Y = (Coords->Y < 0) ? (Coords->Y + WindowHeight) : (Coords->Y % WindowHeight);
+
     uint8_t *Pixel = (uint8_t *)((char *)BitmapMemory + (Coords->Y * BitmapWidth * 4) + (Coords->X * 4));
 
     *Pixel = Colors->Blue;
@@ -61,7 +72,7 @@ void SetPixelInBuffer(Vec2 *Coords, ColorTriple *Colors)
 }
 
 /// TODO!! Restore the actual width capabilities (e.g., reducing brightness incrementally further away pixel is from center of line)
-void DrawLineWidth(Vec2 *Point1, Vec2 *Point2, ColorTriple *Color)
+void DrawLineWidth(Vec2 *Point1, Vec2 *Point2, ColorTriple *Color, int WindowWidth, int WindowHeight)
 { 
     int x0 = Point1->X;
     int x1 = Point2->X;
@@ -79,7 +90,7 @@ void DrawLineWidth(Vec2 *Point1, Vec2 *Point2, ColorTriple *Color)
         Vec2 Coords;
         Coords.X = x0;
         Coords.Y = y0;
-        SetPixelInBuffer(&Coords, Color);
+        SetPixelInBuffer(&Coords, Color, WindowWidth, WindowHeight);
         e2 = err; x2 = x0;
         if (2*e2 >= -dx)
         {
@@ -89,7 +100,7 @@ void DrawLineWidth(Vec2 *Point1, Vec2 *Point2, ColorTriple *Color)
                 Coords2.X = x0;
                 Coords2.Y = y2 += sy;
                 
-                SetPixelInBuffer(&Coords2, Color);
+                SetPixelInBuffer(&Coords2, Color, WindowWidth, WindowHeight);
             }            
             if (x0 == x1) break;
             e2 = err; err -= dy; x0 += sx; 
@@ -101,7 +112,7 @@ void DrawLineWidth(Vec2 *Point1, Vec2 *Point2, ColorTriple *Color)
                 Vec2 Coords2;
                 Coords2.X = x2 += sx;
                 Coords2.Y = y0;
-                SetPixelInBuffer(&Coords2, Color);
+                SetPixelInBuffer(&Coords2, Color, WindowWidth, WindowHeight);
             }
             if (y0 == y1) break;
             err += dx; y0 += sy; 
@@ -137,7 +148,7 @@ void ClearBuffer()
 	ZeroMemory(BitmapMemory, BitmapHeight * BitmapWidth * 4);
 }
 
-void DrawPolygon(Vec2 *CoordArray, int NumVertices, ColorTriple *Color)
+void DrawPolygon(Vec2 *CoordArray, int NumVertices, ColorTriple *Color, int WindowWidth, int WindowHeight)
 {
     if (!BitmapMemory) return;
     if (NumVertices < 3) return;
@@ -146,17 +157,17 @@ void DrawPolygon(Vec2 *CoordArray, int NumVertices, ColorTriple *Color)
 
     for (int i = 0; i < NumVertices-1; ++i)
     {
-        DrawLineWidth(&CoordArray[cur], &CoordArray[next], Color);
+        DrawLineWidth(&CoordArray[cur], &CoordArray[next], Color, WindowWidth, WindowHeight);
         ++cur;
         if (i < NumVertices - 2) ++next;
     }
-    DrawLineWidth(&CoordArray[cur], &CoordArray[0], Color);
+    DrawLineWidth(&CoordArray[cur], &CoordArray[0], Color, WindowWidth, WindowHeight);
 }
 
 void DrawToWindow(HDC WindowDC, RECT *WindowRect, int Width, int Height)
 {   
     ClearBuffer();
-    DrawPolygon(Player.Vertices, 3, &(Player.Color));
+    DrawPolygon(Player.Model->Vertices, 3, &(Player.Model->Color), Width, Height);
     StretchDIBits(WindowDC, 0, 0, Width, Height, 0, 0, Width, Height, BitmapMemory, &BitmapInfo, DIB_RGB_COLORS, SRCCOPY);
 }
 
@@ -181,7 +192,27 @@ XINPUT_GAMEPAD GetControllerInput(DWORD ControllerNumber)
     }
 }
 
-void UpdateGameState(XINPUT_GAMEPAD *Controller)
+void AdjustPlayerCoordinates(int WindowWidth, int WindowHeight)
+{
+    if (Player.Model->Vertices[0].X < 0 && Player.Model->Vertices[1].X < 0 && Player.Model->Vertices[2].X < 0)
+    {
+        for (int i = 0; i < 3; ++i) Player.Model->Vertices[i].X += WindowWidth;
+    }
+    if (Player.Model->Vertices[0].X > WindowWidth && Player.Model->Vertices[1].X > WindowWidth && Player.Model->Vertices[2].X > WindowWidth)
+    {
+        for (int i = 0; i < 3; ++i) Player.Model->Vertices[i].X = Player.Model->Vertices[i].X % WindowWidth;
+    }
+    if (Player.Model->Vertices[0].Y < 0 && Player.Model->Vertices[1].Y < 0 && Player.Model->Vertices[2].Y < 0)
+    {
+        for (int i = 0; i < 3; ++i) Player.Model->Vertices[i].Y += WindowHeight;
+    }
+    if (Player.Model->Vertices[0].Y > WindowHeight && Player.Model->Vertices[1].Y > WindowHeight && Player.Model->Vertices[2].Y > WindowHeight)
+    {
+        for (int i = 0; i < 3; ++i) Player.Model->Vertices[i].Y = Player.Model->Vertices[i].Y % WindowHeight;
+    }
+}
+
+void UpdateGameState(XINPUT_GAMEPAD *Controller, int WindowWidth, int WindowHeight)
 {
     PlayerControlInput PlayerInput;
     PlayerInput.MoveUp = Controller->sThumbLY > 10000 ? true : false;
@@ -199,36 +230,36 @@ void UpdateGameState(XINPUT_GAMEPAD *Controller)
     }
     if (PlayerInput.A_Pressed)
     {
-        Player.Color.Red = 200, Player.Color.Blue = 0;
+        Player.Model->Color.Red = 200, Player.Model->Color.Blue = 0;
     }
     if (PlayerInput.B_Pressed)
     {
-        Player.Color.Red = 0, Player.Color.Blue = 200;
+        Player.Model->Color.Red = 0, Player.Model->Color.Blue = 200;
     }
     if (PlayerInput.MoveUp)
     {
-        Player.Vertices[0].Y += 1;
-        Player.Vertices[1].Y += 1;
-        Player.Vertices[2].Y += 1;
+        Player.Y_Momentum += .01;
     }
     if (PlayerInput.MoveDown)
     {
-        Player.Vertices[0].Y -= 1;
-        Player.Vertices[1].Y -= 1;
-        Player.Vertices[2].Y -= 1;
+        Player.Y_Momentum -= .01;
     }
     if (PlayerInput.MoveRight)
     {
-        Player.Vertices[0].X += 1;
-        Player.Vertices[1].X += 1;
-        Player.Vertices[2].X += 1;
+        Player.X_Momentum += .01;
     }
     if (PlayerInput.MoveLeft)
     {
-        Player.Vertices[0].X -= 1;
-        Player.Vertices[1].X -= 1;
-        Player.Vertices[2].X -= 1;
+        Player.X_Momentum -= .01;
     }
+
+    for (int i = 0; i < 3; ++i)
+    {
+        Player.Model->Vertices[i].X += Player.X_Momentum;
+        Player.Model->Vertices[i].Y += Player.Y_Momentum;
+    }
+
+    AdjustPlayerCoordinates(WindowWidth, WindowHeight);
 }
 
 void InitDirectSound(HWND Window, int BufferSize, int SamplesPerSecond)
@@ -285,8 +316,10 @@ well as to ensure we don't melt any CPUs. That delta will eventually
 be passed to GameTick(), as well as the required HWND for blitting purposes. */
 void GameTick(HWND WindHandle)
 {
+    RECT WinRect;
+    GetClientRect(WindHandle, &WinRect);
     XINPUT_GAMEPAD Controller1State = GetControllerInput(0);
-    UpdateGameState(&Controller1State);
+    UpdateGameState(&Controller1State, WinRect.right - WinRect.left, WinRect.top - WinRect.bottom);
     HDC WindowDC = GetDC(WindHandle);
     RenderGame(WindHandle, WindowDC);
     ReleaseDC(WindHandle, WindowDC);
@@ -380,6 +413,7 @@ int CALLBACK WinMain(HINSTANCE Instance,
         if (WindowHandle)
         {
             Player = {};
+            PlayerModel Model = {};
             BlackBrush = CreateSolidBrush(RGB(0,0,0));
             LineWidth = 3.0f;
             
@@ -387,20 +421,27 @@ int CALLBACK WinMain(HINSTANCE Instance,
             PlayerLeft.X = 100, PlayerLeft.Y = 100;
             PlayerTop.X = 120, PlayerTop.Y = 130;
             PlayerRight.X = 140, PlayerRight.Y = 100;
-            Player.Vertices[0] = PlayerLeft, Player.Vertices[1] = PlayerTop, Player.Vertices[2] = PlayerRight;
+            Model.Vertices[0] = PlayerLeft, Model.Vertices[1] = PlayerTop, Model.Vertices[2] = PlayerRight;
 
             ColorTriple PlayerColor;
             PlayerColor.Red = 100, PlayerColor.Blue = 100, PlayerColor.Green = 100;
-            Player.Color = PlayerColor;
+            Model.Color = PlayerColor;
+            Player.Model = &Model;
+            Player.X_Momentum = 0.0f;
+            Player.Y_Momentum = 0.0f;
+            Vec2 mp = {};
+            mp.X = 20, mp.Y = 20;
+            Player.Midpoint = mp;
+            bool SoundIsPlaying = false;
             int Hertz = 256;
+            int Volume = 1000;
             uint32_t SampleIndex = 0;
             int BytesPerSample = sizeof(int16_t) * 2;
             int SamplesPerSecond = 48000;
             int SecondaryBufferSize = SamplesPerSecond * BytesPerSample;
-            int SquareWavePeriod = SamplesPerSecond/Hertz;
+            int SineWavePeriod = SamplesPerSecond/Hertz;
 
             InitDirectSound(WindowHandle, SecondaryBufferSize, SamplesPerSecond);
-            GlobalSecondaryBuffer->Play(0, 0, DSBPLAY_LOOPING);
 
             for (;;)
             {
@@ -422,7 +463,18 @@ int CALLBACK WinMain(HINSTANCE Instance,
                 {
                     DWORD NumBytes;
                     DWORD SampleIndexToLock = (SampleIndex * BytesPerSample) % SecondaryBufferSize;
-                    if (SampleIndexToLock > PlayCursor)
+                    if (SampleIndexToLock == PlayCursor)
+                    {
+                        if (SoundIsPlaying)
+                        {
+                            NumBytes = 0;
+                        }
+                        else
+                        {
+                            NumBytes = SecondaryBufferSize;
+                        }
+                    }
+                    else if (SampleIndexToLock > PlayCursor)
                     {
                         NumBytes = SecondaryBufferSize - SampleIndexToLock;
                         NumBytes += PlayCursor;
@@ -441,14 +493,18 @@ int CALLBACK WinMain(HINSTANCE Instance,
                         DWORD AudioRegion2SampleCount = AudioBytes2/BytesPerSample;
                         for (DWORD i = 0; i < AudioRegion1SampleCount; ++i)
                         {
-                            int16_t Sample = ((SampleIndex / (SquareWavePeriod / 2)) % 2) ? 1000 : -1000;
+                            float t = 2.0f * 3.14159 * (((float)SampleIndex) / ((float)SineWavePeriod));
+                            float SineValue = sinf(t);
+                            int16_t Sample = (int16_t)(SineValue * Volume);
                             *SoundOut++ = Sample;
                             *SoundOut++ = Sample;
                             SampleIndex++;
                         }
                         for (DWORD i = 0; i < AudioRegion2SampleCount; ++i)
                         {   
-                            int16_t Sample = ((SampleIndex / (SquareWavePeriod / 2)) % 2) ? 1000 : -1000;
+                            float t = 2.0f * 3.14159 * (((float)SampleIndex) / ((float)SineWavePeriod));
+                            float SineValue = sinf(t);
+                            int16_t Sample = (int16_t)(SineValue * Volume);
                             *SoundOut++ = Sample;
                             *SoundOut++ = Sample;
                             SampleIndex++;
@@ -456,6 +512,11 @@ int CALLBACK WinMain(HINSTANCE Instance,
                     }
                     GlobalSecondaryBuffer->Unlock(AudioPtr1, AudioBytes1, AudioPtr2, AudioBytes2);
                 }
+                //if (!SoundIsPlaying)
+                //{
+                //    GlobalSecondaryBuffer->Play(0, 0, DSBPLAY_LOOPING);
+                //    SoundIsPlaying = true;
+                //}
             }
         }
     }   
