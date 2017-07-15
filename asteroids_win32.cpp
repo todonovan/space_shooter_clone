@@ -1,10 +1,12 @@
 #include <windows.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <math.h>
 #include <xinput.h>
 #include <dsound.h>
 #include <stdexcept>
 
+static int64_t PerfCountFrequency;
 static BITMAPINFO BitmapInfo;
 static void *BitmapMemory;
 static int BitmapWidth;
@@ -52,6 +54,18 @@ struct PlayerObject
     Vec2 Midpoint;
 };
 
+struct SoundOutputParams
+{
+    int SamplesPerSecond;
+    int SoundHz;
+    int16_t Volume;
+    uint32_t SampleIndex;
+    int WavePeriod;
+    int BytesPerSample;
+    int SecondaryBufferSize;
+    int LatencySampleCount;
+};
+
 static PlayerObject Player;
 
 
@@ -89,6 +103,8 @@ void DrawLineWidth(Vec2 *Point1, Vec2 *Point2, ColorTriple *Color, int WindowWid
         Vec2 Coords;
         Coords.X = x0;
         Coords.Y = y0;
+        // To restore the anti-aliasing, this proc would have to take a param
+        // that represented the amount to scale down the 'brightness' of the pixel.
         SetPixelInBuffer(&Coords, Color, WindowWidth, WindowHeight);
         e2 = err; x2 = x0;
         if (2*e2 >= -dx)
@@ -144,6 +160,7 @@ void ResizeDIBSection(int Width, int Height)
 
 void ClearBuffer()
 {
+    if (!BitmapMemory) return;
 	ZeroMemory(BitmapMemory, BitmapHeight * BitmapWidth * 4);
 }
 
@@ -201,21 +218,21 @@ XINPUT_GAMEPAD GetControllerInput(DWORD ControllerNumber)
 
 void AdjustPlayerCoordinates(int WindowWidth, int WindowHeight)
 {
-    if (Player.Model->Vertices[0].X < 0 && Player.Model->Vertices[1].X < 0 && Player.Model->Vertices[2].X < 0)
+    if (Player.Midpoint.X < 0)
     {
-        for (int i = 0; i < 3; ++i) Player.Model->Vertices[i].X += WindowWidth;
+        Player.Midpoint.X += WindowWidth;
     }
-    if (Player.Model->Vertices[0].X > WindowWidth && Player.Model->Vertices[1].X > WindowWidth && Player.Model->Vertices[2].X > WindowWidth)
+    else if (Player.Midpoint.X >= WindowWidth)
     {
-        for (int i = 0; i < 3; ++i) Player.Model->Vertices[i].X = (int)Player.Model->Vertices[i].X % WindowWidth;
+        Player.Midpoint.X -= WindowWidth;
     }
-    if (Player.Model->Vertices[0].Y < 0 && Player.Model->Vertices[1].Y < 0 && Player.Model->Vertices[2].Y < 0)
+    if (Player.Midpoint.Y < 0)
     {
-        for (int i = 0; i < 3; ++i) Player.Model->Vertices[i].Y += WindowHeight;
+        Player.Midpoint.Y += WindowHeight;
     }
-    if (Player.Model->Vertices[0].Y > WindowHeight && Player.Model->Vertices[1].Y > WindowHeight && Player.Model->Vertices[2].Y > WindowHeight)
+    else if (Player.Midpoint.Y >= WindowHeight)
     {
-        for (int i = 0; i < 3; ++i) Player.Model->Vertices[i].Y = (int)Player.Model->Vertices[i].Y % WindowHeight;
+        Player.Midpoint.Y -= WindowHeight;
     }
 }
 
@@ -261,12 +278,12 @@ void UpdateGameState(XINPUT_GAMEPAD *Controller, long WindowWidth, long WindowHe
         Player.Model->Color.Red = 0, Player.Model->Color.Blue = 200;
     }
     
-    Player.X_Momentum += (PlayerInput.NormalizedLX * PlayerInput.Magnitude) * .01;
-    Player.Y_Momentum += (PlayerInput.NormalizedLY * PlayerInput.Magnitude) * .01;
+    Player.X_Momentum += (PlayerInput.NormalizedLX * PlayerInput.Magnitude) * .5f;
+    Player.Y_Momentum += (PlayerInput.NormalizedLY * PlayerInput.Magnitude) * .5f;
 
     Player.Midpoint.X += Player.X_Momentum;
     Player.Midpoint.Y += Player.Y_Momentum;
-    //AdjustPlayerCoordinates(WindowWidth, WindowHeight);
+    AdjustPlayerCoordinates(WindowWidth, WindowHeight);
 }
 
 void InitDirectSound(HWND Window, int BufferSize, int SamplesPerSecond)
@@ -330,6 +347,41 @@ void GameTick(HWND WindHandle)
     HDC WindowDC = GetDC(WindHandle);
     RenderGame(WindHandle, WindowDC);
     ReleaseDC(WindHandle, WindowDC);
+}
+
+void FillSoundBuffer(SoundOutputParams *SoundParams, DWORD ByteToLock, DWORD BytesToWrite)
+{
+    void *AudioPtr1, *AudioPtr2;
+    DWORD AudioBytes1, AudioBytes2;
+
+    if (SUCCEEDED(GlobalSecondaryBuffer->Lock(ByteToLock, BytesToWrite, &AudioPtr1, &AudioBytes1, &AudioPtr2, &AudioBytes2, 0)))
+    {
+        int16_t *SoundOut = (int16_t *)AudioPtr1;
+        DWORD AudioRegion1SampleCount = AudioBytes1/SoundParams->BytesPerSample;
+        DWORD AudioRegion2SampleCount = AudioBytes2/SoundParams->BytesPerSample;
+        for (DWORD i = 0; i < AudioRegion1SampleCount; ++i)
+        {
+            float t = 2.0f * 3.14159 * (static_cast<float>(SoundParams->SampleIndex) / static_cast<float>(SoundParams->WavePeriod));
+            float SineValue = sinf(t);
+            int16_t Sample = (int16_t)(SineValue * SoundParams->Volume);
+            *SoundOut++ = Sample;
+            *SoundOut++ = Sample;
+            SoundParams->SampleIndex++;
+        }
+
+        SoundOut = (int16_t *)AudioPtr2;
+        for (DWORD i = 0; i < AudioRegion2SampleCount; ++i)
+        {   
+            float t = 2.0f * 3.14159 * (static_cast<float>(SoundParams->SampleIndex) / static_cast<float>(SoundParams->WavePeriod));
+            float SineValue = sinf(t);
+            int16_t Sample = (int16_t)(SineValue * SoundParams->Volume);
+            *SoundOut++ = Sample;
+            *SoundOut++ = Sample;
+            SoundParams->SampleIndex++;
+        }
+        
+        GlobalSecondaryBuffer->Unlock(AudioPtr1, AudioBytes1, AudioPtr2, AudioBytes2);
+    }
 }
 
 /* The main callback for our window. This function will handle all
@@ -399,6 +451,19 @@ LRESULT CALLBACK AsteroidsWindowCallback(HWND WindHandle,
     return Result;
 }
 
+LARGE_INTEGER GetWallClock()
+{
+    LARGE_INTEGER Result;
+    QueryPerformanceCounter(&Result);
+    return Result;
+}
+
+float GetSecondsElapsed(LARGE_INTEGER StartTime, LARGE_INTEGER EndTime)
+{
+    float Result = (static_cast<float>(EndTime.QuadPart - StartTime.QuadPart) / static_cast<float>(PerfCountFrequency));
+    return Result;
+}
+
 /* The graphical entry point for Windows. */
 int CALLBACK WinMain(HINSTANCE Instance,
                      HINSTANCE PrevInstance,
@@ -411,9 +476,15 @@ int CALLBACK WinMain(HINSTANCE Instance,
     WindowClass.hInstance = Instance;
     WindowClass.lpszClassName = "AsteroidsWindow";
 
+    int MonitorRefreshRate = 60;
+    int GameUpdateRate = 60;
+    float ExpectedSecondsPerFrame = 1.0f / static_cast<float>(GameUpdateRate);
+
+    // Set scheduler granularity to 1ms for Sleep() purposes
+    timeBeginPeriod(1);
     LARGE_INTEGER PerfCountFrequencyUnion;
     QueryPerformanceFrequency(&PerfCountFrequencyUnion);
-    int64_t PerfCountFrequency = PerfCountFrequencyUnion.QuadPart;
+    PerfCountFrequency = PerfCountFrequencyUnion.QuadPart;
 
     // RegisterClass returns an ATOM, which we likely will not need to store.
     if (RegisterClass(&WindowClass))
@@ -446,27 +517,28 @@ int CALLBACK WinMain(HINSTANCE Instance,
             Vec2 mp = {};
             mp.X = 20, mp.Y = 20;
             Player.Midpoint = mp;
-            bool SoundIsPlaying = false;
-            int Hertz = 256;
-            int Volume = 1000;
-            uint32_t SampleIndex = 0;
-            int BytesPerSample = sizeof(int16_t) * 2;
-            int SamplesPerSecond = 48000;
-            int SecondaryBufferSize = SamplesPerSecond * BytesPerSample;
-            int SineWavePeriod = SamplesPerSecond/Hertz;
+            
+            SoundOutputParams SoundParams = {};
 
-            InitDirectSound(WindowHandle, SecondaryBufferSize, SamplesPerSecond);
+            SoundParams.SoundHz = 256;
+            SoundParams.Volume = 1000;
+            SoundParams.SampleIndex = 0;
+            SoundParams.BytesPerSample = sizeof(int16_t) * 2;
+            SoundParams.SamplesPerSecond = 48000;
+            SoundParams.SecondaryBufferSize = SoundParams.SamplesPerSecond * SoundParams.BytesPerSample;
+            SoundParams.WavePeriod = SoundParams.SamplesPerSecond/SoundParams.SoundHz;
+            SoundParams.LatencySampleCount = SoundParams.SamplesPerSecond / 15;
 
-            LARGE_INTEGER LastCounter;
-            QueryPerformanceCounter(&LastCounter);
+            InitDirectSound(WindowHandle, SoundParams.SecondaryBufferSize, SoundParams.SamplesPerSecond);
+            FillSoundBuffer(&SoundParams, 0, SoundParams.LatencySampleCount * SoundParams.BytesPerSample);
+            GlobalSecondaryBuffer->Play(0, 0, DSBPLAY_LOOPING);
 
+            LARGE_INTEGER LastCounter = GetWallClock();
+            
 			uint64_t LastCPUCycleCount = __rdtsc();
 
             for (;;)
             {
-                LARGE_INTEGER BeginCounter;
-                QueryPerformanceCounter(&BeginCounter);
-
                 MSG Message;
                 while (PeekMessage(&Message, 0, 0, 0, PM_REMOVE))
                 {
@@ -484,78 +556,55 @@ int CALLBACK WinMain(HINSTANCE Instance,
                 if (SUCCEEDED(GlobalSecondaryBuffer->GetCurrentPosition(&PlayCursor, &WriteCursor)))
                 {
                     DWORD NumBytes;
-                    DWORD SampleIndexToLock = (SampleIndex * BytesPerSample) % SecondaryBufferSize;
-                    if (SampleIndexToLock == PlayCursor)
+                    DWORD TargetCursor = (PlayCursor + (SoundParams.LatencySampleCount * SoundParams.BytesPerSample)) % SoundParams.SecondaryBufferSize;
+                    DWORD SampleIndexToLock = (SoundParams.SampleIndex * SoundParams.BytesPerSample) % SoundParams.SecondaryBufferSize;
+                    if (SampleIndexToLock > TargetCursor)
                     {
-                        if (SoundIsPlaying)
-                        {
-                            NumBytes = 0;
-                        }
-                        else
-                        {
-                            NumBytes = SecondaryBufferSize;
-                        }
-                    }
-                    else if (SampleIndexToLock > PlayCursor)
-                    {
-                        NumBytes = SecondaryBufferSize - SampleIndexToLock;
-                        NumBytes += PlayCursor;
+                        NumBytes = SoundParams.SecondaryBufferSize - SampleIndexToLock;
+                        NumBytes += TargetCursor;
                     }
                     else
                     {
-                        NumBytes = PlayCursor - SampleIndexToLock;
+                        NumBytes = TargetCursor - SampleIndexToLock;
                     }
-                    void *AudioPtr1, *AudioPtr2;
-                    DWORD AudioBytes1, AudioBytes2;
-                
-                    if (SUCCEEDED(GlobalSecondaryBuffer->Lock(SampleIndexToLock, NumBytes, &AudioPtr1, &AudioBytes1, &AudioPtr2, &AudioBytes2, 0)))
-                    {
-                        int16_t *SoundOut = (int16_t *)AudioPtr1;
-                        DWORD AudioRegion1SampleCount = AudioBytes1/BytesPerSample;
-                        DWORD AudioRegion2SampleCount = AudioBytes2/BytesPerSample;
-                        for (DWORD i = 0; i < AudioRegion1SampleCount; ++i)
-                        {
-                            float t = 2.0f * 3.14159 * (static_cast<float>(SampleIndex) / static_cast<float>(SineWavePeriod));
-                            float SineValue = sinf(t);
-                            int16_t Sample = (int16_t)(SineValue * Volume);
-                            *SoundOut++ = Sample;
-                            *SoundOut++ = Sample;
-                            SampleIndex++;
-                        }
-                        for (DWORD i = 0; i < AudioRegion2SampleCount; ++i)
-                        {   
-                            float t = 2.0f * 3.14159 * (static_cast<float>(SampleIndex) / static_cast<float>(SineWavePeriod));
-                            float SineValue = sinf(t);
-                            int16_t Sample = (int16_t)(SineValue * Volume);
-                            *SoundOut++ = Sample;
-                            *SoundOut++ = Sample;
-                            SampleIndex++;
-                        }
-                    }
-                    GlobalSecondaryBuffer->Unlock(AudioPtr1, AudioBytes1, AudioPtr2, AudioBytes2);
-                }
-                if (!SoundIsPlaying)
-                {
-                    GlobalSecondaryBuffer->Play(0, 0, DSBPLAY_LOOPING);
-                    SoundIsPlaying = true;
-                }
+                    FillSoundBuffer(&SoundParams, SampleIndexToLock, NumBytes);                    
+                }                
                 
 				uint64_t EndCPUCycleCount = __rdtsc();
 
-				LARGE_INTEGER EndCounter;
-                QueryPerformanceCounter(&EndCounter);				
+				LARGE_INTEGER WorkCounter = GetWallClock();			
 
 				int64_t CPUCyclesElapsed = EndCPUCycleCount - LastCPUCycleCount;
-                int64_t CounterElapsed = EndCounter.QuadPart - LastCounter.QuadPart;
-                int32_t MilliSecsPerFrame = static_cast<int32_t>((1000 * CounterElapsed) / PerfCountFrequency);
-				int32_t FramesPerSecond = static_cast<int32_t>(PerfCountFrequency / CounterElapsed);
-				int32_t MegaCyclesPerFrame = static_cast<int32_t>(CPUCyclesElapsed / (1000 * 1000));
+                
+                float SecondsElapsedForCompute = GetSecondsElapsed(LastCounter, WorkCounter);
+
+                float SecondsElapsedForFrame = SecondsElapsedForCompute;
+                if (SecondsElapsedForFrame < ExpectedSecondsPerFrame)
+                {
+                    while (SecondsElapsedForFrame < ExpectedSecondsPerFrame)
+                    {
+                        DWORD SleepLength = static_cast<DWORD>((1000.0f * (ExpectedSecondsPerFrame - SecondsElapsedForFrame)));
+						if (SleepLength > 0)
+						{
+							Sleep(SleepLength);
+						}
+                        SecondsElapsedForFrame = GetSecondsElapsed(LastCounter, GetWallClock());
+                    }
+                }
+                else
+                {
+                    // Handle missed frame
+                }
+
+                LARGE_INTEGER EndCounter = GetWallClock();
+                float MilliSecsPerFrame = 1000.0f * (GetSecondsElapsed(LastCounter, EndCounter));
+				float MegaCyclesPerFrame = static_cast<float>(CPUCyclesElapsed / (1000.0f * 1000.0f));
 
 				char Buffer[256];
-				wsprintf(Buffer, "%dms/f, %dFPS, %dmc/f\n", MilliSecsPerFrame, FramesPerSecond, MegaCyclesPerFrame);
+				sprintf(Buffer, "%.02fms/f, %.02fmc/f\n", MilliSecsPerFrame, MegaCyclesPerFrame);
                 OutputDebugStringA(Buffer);
 
-                LastCounter = EndCounter;
+                LastCounter = GetWallClock();
 				LastCPUCycleCount = EndCPUCycleCount;
             }
         }
