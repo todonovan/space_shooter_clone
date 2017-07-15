@@ -17,8 +17,8 @@ static LPDIRECTSOUNDBUFFER GlobalSecondaryBuffer;
 
 struct Vec2
 {
-    int X;
-    int Y;
+    float X;
+    float Y;
 };
 
 struct ColorTriple
@@ -30,10 +30,9 @@ struct ColorTriple
 
 struct PlayerControlInput
 {
-    bool MoveUp;
-    bool MoveDown;
-    bool MoveRight;
-    bool MoveLeft;
+    float Magnitude;
+    float NormalizedLX;
+    float NormalizedLY;
     bool A_Pressed;
     bool B_Pressed;
     bool Start_Pressed;
@@ -59,10 +58,10 @@ static PlayerObject Player;
 void SetPixelInBuffer(Vec2 *Coords, ColorTriple *Colors, int WindowWidth, int WindowHeight)
 {
     if (!BitmapMemory) return;
-    Coords->X = (Coords->X < 0) ? (Coords->X + WindowWidth) : (Coords->X % WindowWidth);
-    Coords->Y = (Coords->Y < 0) ? (Coords->Y + WindowHeight) : (Coords->Y % WindowHeight);
+    int X = (Coords->X < 0) ? ((int)Coords->X + WindowWidth) : ((int)Coords->X % WindowWidth);
+    int Y = (Coords->Y < 0) ? ((int)Coords->Y + WindowHeight) : ((int)Coords->Y % WindowHeight);
 
-    uint8_t *Pixel = (uint8_t *)((char *)BitmapMemory + (Coords->Y * BitmapWidth * 4) + (Coords->X * 4));
+    uint8_t *Pixel = (uint8_t *)((char *)BitmapMemory + (Y * BitmapWidth * 4) + (X * 4));
 
     *Pixel = Colors->Blue;
     Pixel++;
@@ -148,26 +147,34 @@ void ClearBuffer()
 	ZeroMemory(BitmapMemory, BitmapHeight * BitmapWidth * 4);
 }
 
-void DrawPolygon(Vec2 *CoordArray, int NumVertices, ColorTriple *Color, int WindowWidth, int WindowHeight)
+void DrawPlayer(int WindowWidth, int WindowHeight)
 {
     if (!BitmapMemory) return;
-    if (NumVertices < 3) return;
 
     int cur = 0, next = 1;
+    Vec2 Cur, Next;
 
-    for (int i = 0; i < NumVertices-1; ++i)
+    for (int i = 0; i < 2; ++i)
     {
-        DrawLineWidth(&CoordArray[cur], &CoordArray[next], Color, WindowWidth, WindowHeight);
+        Cur.X = Player.Model->Vertices[cur].X + Player.Midpoint.X;
+        Cur.Y = Player.Model->Vertices[cur].Y + Player.Midpoint.Y;
+        Next.X = Player.Model->Vertices[next].X + Player.Midpoint.X;
+        Next.Y = Player.Model->Vertices[next].Y + Player.Midpoint.Y;
+        DrawLineWidth(&Cur, &Next, &(Player.Model->Color), WindowWidth, WindowHeight);
         ++cur;
-        if (i < NumVertices - 2) ++next;
+        if (i < 1) ++next;
     }
-    DrawLineWidth(&CoordArray[cur], &CoordArray[0], Color, WindowWidth, WindowHeight);
+    Cur.X = Player.Model->Vertices[cur].X + Player.Midpoint.X;
+    Cur.Y = Player.Model->Vertices[cur].Y + Player.Midpoint.Y;
+    Next.X = Player.Model->Vertices[0].X + Player.Midpoint.X;
+    Next.Y = Player.Model->Vertices[0].Y + Player.Midpoint.Y;
+    DrawLineWidth(&Cur, &Next, &(Player.Model->Color), WindowWidth, WindowHeight);
 }
 
 void DrawToWindow(HDC WindowDC, RECT *WindowRect, int Width, int Height)
 {   
     ClearBuffer();
-    DrawPolygon(Player.Model->Vertices, 3, &(Player.Model->Color), Width, Height);
+    DrawPlayer(Width, Height);
     StretchDIBits(WindowDC, 0, 0, Width, Height, 0, 0, Width, Height, BitmapMemory, &BitmapInfo, DIB_RGB_COLORS, SRCCOPY);
 }
 
@@ -200,7 +207,7 @@ void AdjustPlayerCoordinates(int WindowWidth, int WindowHeight)
     }
     if (Player.Model->Vertices[0].X > WindowWidth && Player.Model->Vertices[1].X > WindowWidth && Player.Model->Vertices[2].X > WindowWidth)
     {
-        for (int i = 0; i < 3; ++i) Player.Model->Vertices[i].X = Player.Model->Vertices[i].X % WindowWidth;
+        for (int i = 0; i < 3; ++i) Player.Model->Vertices[i].X = (int)Player.Model->Vertices[i].X % WindowWidth;
     }
     if (Player.Model->Vertices[0].Y < 0 && Player.Model->Vertices[1].Y < 0 && Player.Model->Vertices[2].Y < 0)
     {
@@ -208,17 +215,34 @@ void AdjustPlayerCoordinates(int WindowWidth, int WindowHeight)
     }
     if (Player.Model->Vertices[0].Y > WindowHeight && Player.Model->Vertices[1].Y > WindowHeight && Player.Model->Vertices[2].Y > WindowHeight)
     {
-        for (int i = 0; i < 3; ++i) Player.Model->Vertices[i].Y = Player.Model->Vertices[i].Y % WindowHeight;
+        for (int i = 0; i < 3; ++i) Player.Model->Vertices[i].Y = (int)Player.Model->Vertices[i].Y % WindowHeight;
     }
 }
 
-void UpdateGameState(XINPUT_GAMEPAD *Controller, int WindowWidth, int WindowHeight)
+void UpdateGameState(XINPUT_GAMEPAD *Controller, long WindowWidth, long WindowHeight)
 {
     PlayerControlInput PlayerInput;
-    PlayerInput.MoveUp = Controller->sThumbLY > 10000 ? true : false;
-    PlayerInput.MoveDown = Controller->sThumbLY < -10000 ? true : false;
-    PlayerInput.MoveRight = Controller->sThumbLX > 10000 ? true : false;
-    PlayerInput.MoveLeft = Controller->sThumbLX < -10000 ? true : false;
+    float LX = Controller->sThumbLX;
+    float LY = Controller->sThumbLY;
+    float magnitude = sqrt(LX*LX + LY*LY);
+
+    PlayerInput.NormalizedLX = LX / magnitude;
+    PlayerInput.NormalizedLY = LY / magnitude;
+
+    float normalizedMagnitude = 0;
+
+    if (magnitude > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE)
+    {
+        if (magnitude > 32767) magnitude = 32767;
+        magnitude -= XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE;
+        normalizedMagnitude = magnitude / (32767 - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+    }
+    else
+    {
+        magnitude = 0.0;
+        normalizedMagnitude = 0.0;
+    }
+    PlayerInput.Magnitude = normalizedMagnitude;
 
     PlayerInput.A_Pressed = (Controller->wButtons & XINPUT_GAMEPAD_A);
     PlayerInput.B_Pressed = (Controller->wButtons & XINPUT_GAMEPAD_B);
@@ -236,30 +260,13 @@ void UpdateGameState(XINPUT_GAMEPAD *Controller, int WindowWidth, int WindowHeig
     {
         Player.Model->Color.Red = 0, Player.Model->Color.Blue = 200;
     }
-    if (PlayerInput.MoveUp)
-    {
-        Player.Y_Momentum += .01;
-    }
-    if (PlayerInput.MoveDown)
-    {
-        Player.Y_Momentum -= .01;
-    }
-    if (PlayerInput.MoveRight)
-    {
-        Player.X_Momentum += .01;
-    }
-    if (PlayerInput.MoveLeft)
-    {
-        Player.X_Momentum -= .01;
-    }
+    
+    Player.X_Momentum += (PlayerInput.NormalizedLX * PlayerInput.Magnitude) * .01;
+    Player.Y_Momentum += (PlayerInput.NormalizedLY * PlayerInput.Magnitude) * .01;
 
-    for (int i = 0; i < 3; ++i)
-    {
-        Player.Model->Vertices[i].X += Player.X_Momentum;
-        Player.Model->Vertices[i].Y += Player.Y_Momentum;
-    }
-
-    AdjustPlayerCoordinates(WindowWidth, WindowHeight);
+    Player.Midpoint.X += Player.X_Momentum;
+    Player.Midpoint.Y += Player.Y_Momentum;
+    //AdjustPlayerCoordinates(WindowWidth, WindowHeight);
 }
 
 void InitDirectSound(HWND Window, int BufferSize, int SamplesPerSecond)
@@ -319,7 +326,7 @@ void GameTick(HWND WindHandle)
     RECT WinRect;
     GetClientRect(WindHandle, &WinRect);
     XINPUT_GAMEPAD Controller1State = GetControllerInput(0);
-    UpdateGameState(&Controller1State, WinRect.right - WinRect.left, WinRect.top - WinRect.bottom);
+    UpdateGameState(&Controller1State, WinRect.right, WinRect.bottom);
     HDC WindowDC = GetDC(WindHandle);
     RenderGame(WindHandle, WindowDC);
     ReleaseDC(WindHandle, WindowDC);
@@ -404,6 +411,10 @@ int CALLBACK WinMain(HINSTANCE Instance,
     WindowClass.hInstance = Instance;
     WindowClass.lpszClassName = "AsteroidsWindow";
 
+    LARGE_INTEGER PerfCountFrequencyUnion;
+    QueryPerformanceFrequency(&PerfCountFrequencyUnion);
+    int64_t PerfCountFrequency = PerfCountFrequencyUnion.QuadPart;
+
     // RegisterClass returns an ATOM, which we likely will not need to store.
     if (RegisterClass(&WindowClass))
     {
@@ -417,10 +428,13 @@ int CALLBACK WinMain(HINSTANCE Instance,
             BlackBrush = CreateSolidBrush(RGB(0,0,0));
             LineWidth = 3.0f;
             
+            Vec2 Midpoint = {};
+            Midpoint.X = 140.0f, Midpoint.Y = 140.0f;
+            Player.Midpoint = Midpoint;
             Vec2 PlayerLeft, PlayerTop, PlayerRight;
-            PlayerLeft.X = 100, PlayerLeft.Y = 100;
-            PlayerTop.X = 120, PlayerTop.Y = 130;
-            PlayerRight.X = 140, PlayerRight.Y = 100;
+            PlayerLeft.X = -20.0f, PlayerLeft.Y = -15.0f;
+            PlayerTop.X = 0.0f, PlayerTop.Y = 15.0f;
+            PlayerRight.X = 20.0f, PlayerRight.Y = -15.0f;
             Model.Vertices[0] = PlayerLeft, Model.Vertices[1] = PlayerTop, Model.Vertices[2] = PlayerRight;
 
             ColorTriple PlayerColor;
@@ -443,8 +457,16 @@ int CALLBACK WinMain(HINSTANCE Instance,
 
             InitDirectSound(WindowHandle, SecondaryBufferSize, SamplesPerSecond);
 
+            LARGE_INTEGER LastCounter;
+            QueryPerformanceCounter(&LastCounter);
+
+			uint64_t LastCPUCycleCount = __rdtsc();
+
             for (;;)
             {
+                LARGE_INTEGER BeginCounter;
+                QueryPerformanceCounter(&BeginCounter);
+
                 MSG Message;
                 while (PeekMessage(&Message, 0, 0, 0, PM_REMOVE))
                 {
@@ -493,7 +515,7 @@ int CALLBACK WinMain(HINSTANCE Instance,
                         DWORD AudioRegion2SampleCount = AudioBytes2/BytesPerSample;
                         for (DWORD i = 0; i < AudioRegion1SampleCount; ++i)
                         {
-                            float t = 2.0f * 3.14159 * (((float)SampleIndex) / ((float)SineWavePeriod));
+                            float t = 2.0f * 3.14159 * (static_cast<float>(SampleIndex) / static_cast<float>(SineWavePeriod));
                             float SineValue = sinf(t);
                             int16_t Sample = (int16_t)(SineValue * Volume);
                             *SoundOut++ = Sample;
@@ -502,7 +524,7 @@ int CALLBACK WinMain(HINSTANCE Instance,
                         }
                         for (DWORD i = 0; i < AudioRegion2SampleCount; ++i)
                         {   
-                            float t = 2.0f * 3.14159 * (((float)SampleIndex) / ((float)SineWavePeriod));
+                            float t = 2.0f * 3.14159 * (static_cast<float>(SampleIndex) / static_cast<float>(SineWavePeriod));
                             float SineValue = sinf(t);
                             int16_t Sample = (int16_t)(SineValue * Volume);
                             *SoundOut++ = Sample;
@@ -512,11 +534,29 @@ int CALLBACK WinMain(HINSTANCE Instance,
                     }
                     GlobalSecondaryBuffer->Unlock(AudioPtr1, AudioBytes1, AudioPtr2, AudioBytes2);
                 }
-                //if (!SoundIsPlaying)
-                //{
-                //    GlobalSecondaryBuffer->Play(0, 0, DSBPLAY_LOOPING);
-                //    SoundIsPlaying = true;
-                //}
+                if (!SoundIsPlaying)
+                {
+                    GlobalSecondaryBuffer->Play(0, 0, DSBPLAY_LOOPING);
+                    SoundIsPlaying = true;
+                }
+                
+				uint64_t EndCPUCycleCount = __rdtsc();
+
+				LARGE_INTEGER EndCounter;
+                QueryPerformanceCounter(&EndCounter);				
+
+				int64_t CPUCyclesElapsed = EndCPUCycleCount - LastCPUCycleCount;
+                int64_t CounterElapsed = EndCounter.QuadPart - LastCounter.QuadPart;
+                int32_t MilliSecsPerFrame = static_cast<int32_t>((1000 * CounterElapsed) / PerfCountFrequency);
+				int32_t FramesPerSecond = static_cast<int32_t>(PerfCountFrequency / CounterElapsed);
+				int32_t MegaCyclesPerFrame = static_cast<int32_t>(CPUCyclesElapsed / (1000 * 1000));
+
+				char Buffer[256];
+				wsprintf(Buffer, "%dms/f, %dFPS, %dmc/f\n", MilliSecsPerFrame, FramesPerSecond, MegaCyclesPerFrame);
+                OutputDebugStringA(Buffer);
+
+                LastCounter = EndCounter;
+				LastCPUCycleCount = EndCPUCycleCount;
             }
         }
     }   
