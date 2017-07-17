@@ -37,21 +37,24 @@ struct PlayerControlInput
     float NormalizedLY;
     bool A_Pressed;
     bool B_Pressed;
+    bool LTrigger_Pressed;
+    bool RTrigger_Pressed;
     bool Start_Pressed;
 };
 
 struct PlayerModel
 {
-    Vec2 Vertices[3];
+    Vec2 Vertices[4];
     ColorTriple Color;
 };
 
 struct PlayerObject
 {
     PlayerModel *Model;
+    Vec2 Midpoint;
     float X_Momentum;
     float Y_Momentum;
-    Vec2 Midpoint;
+    float AngularMomentum;
 };
 
 struct SoundOutputParams
@@ -67,7 +70,6 @@ struct SoundOutputParams
 };
 
 static PlayerObject Player;
-
 
 void SetPixelInBuffer(Vec2 *Coords, ColorTriple *Colors, int WindowWidth, int WindowHeight)
 {
@@ -171,7 +173,7 @@ void DrawPlayer(int WindowWidth, int WindowHeight)
     int cur = 0, next = 1;
     Vec2 Cur, Next;
 
-    for (int i = 0; i < 2; ++i)
+    for (int i = 0; i < 3; ++i)
     {
         Cur.X = Player.Model->Vertices[cur].X + Player.Midpoint.X;
         Cur.Y = Player.Model->Vertices[cur].Y + Player.Midpoint.Y;
@@ -179,7 +181,7 @@ void DrawPlayer(int WindowWidth, int WindowHeight)
         Next.Y = Player.Model->Vertices[next].Y + Player.Midpoint.Y;
         DrawLineWidth(&Cur, &Next, &(Player.Model->Color), WindowWidth, WindowHeight);
         ++cur;
-        if (i < 1) ++next;
+        if (i < 2) ++next;
     }
     Cur.X = Player.Model->Vertices[cur].X + Player.Midpoint.X;
     Cur.Y = Player.Model->Vertices[cur].Y + Player.Midpoint.Y;
@@ -213,6 +215,21 @@ XINPUT_GAMEPAD GetControllerInput(DWORD ControllerNumber)
     else
     {
         throw std::runtime_error("Controller not connected");
+    }
+}
+
+void RotatePlayerModel(bool CounterClockwise)
+{
+    char RotateSign = 1;
+    if (!CounterClockwise) RotateSign *= -1;
+
+    for (int i = 0; i < 4; ++i)
+    {
+        float Theta = Player.AngularMomentum * RotateSign;
+        float X_Orig = Player.Model->Vertices[i].X;
+        float Y_Orig = Player.Model->Vertices[i].Y;
+        Player.Model->Vertices[i].X = (X_Orig * cos(Theta)) - (Y_Orig * sin(Theta));
+        Player.Model->Vertices[i].Y = (X_Orig * sin(Theta)) + (Y_Orig * cos(Theta));
     }
 }
 
@@ -263,19 +280,25 @@ void UpdateGameState(XINPUT_GAMEPAD *Controller, long WindowWidth, long WindowHe
 
     PlayerInput.A_Pressed = (Controller->wButtons & XINPUT_GAMEPAD_A);
     PlayerInput.B_Pressed = (Controller->wButtons & XINPUT_GAMEPAD_B);
+    PlayerInput.LTrigger_Pressed = Controller->bLeftTrigger > 50;
+    PlayerInput.RTrigger_Pressed = Controller->bRightTrigger > 50;
     PlayerInput.Start_Pressed = (Controller->wButtons & XINPUT_GAMEPAD_START);
 
     if (PlayerInput.Start_Pressed)
     {
         PostQuitMessage(0);
     }
-    if (PlayerInput.A_Pressed)
-    {
-        Player.Model->Color.Red = 200, Player.Model->Color.Blue = 0;
-    }
     if (PlayerInput.B_Pressed)
     {
         Player.Model->Color.Red = 0, Player.Model->Color.Blue = 200;
+    }
+    if (PlayerInput.LTrigger_Pressed)
+    {
+        RotatePlayerModel(true);
+    }
+    if (PlayerInput.RTrigger_Pressed)
+    {
+        RotatePlayerModel(false);
     }
     
     Player.X_Momentum += (PlayerInput.NormalizedLX * PlayerInput.Magnitude) * .5f;
@@ -498,25 +521,27 @@ int CALLBACK WinMain(HINSTANCE Instance,
             PlayerModel Model = {};
             BlackBrush = CreateSolidBrush(RGB(0,0,0));
             LineWidth = 3.0f;
+            RECT WinRect;
+            GetClientRect(WindowHandle, &WinRect);
             
             Vec2 Midpoint = {};
-            Midpoint.X = 140.0f, Midpoint.Y = 140.0f;
+            Midpoint.X = WinRect.right / 2;
+            Midpoint.Y = WinRect.bottom / 10;
             Player.Midpoint = Midpoint;
-            Vec2 PlayerLeft, PlayerTop, PlayerRight;
-            PlayerLeft.X = -20.0f, PlayerLeft.Y = -15.0f;
-            PlayerTop.X = 0.0f, PlayerTop.Y = 15.0f;
-            PlayerRight.X = 20.0f, PlayerRight.Y = -15.0f;
-            Model.Vertices[0] = PlayerLeft, Model.Vertices[1] = PlayerTop, Model.Vertices[2] = PlayerRight;
+            Vec2 PlayerLeft, PlayerTop, PlayerRight, PlayerBottom;
+            PlayerLeft.X = -20.0f, PlayerLeft.Y = -20.0f;
+            PlayerTop.X = 0.0f, PlayerTop.Y = 40.0f;
+            PlayerRight.X = 20.0f, PlayerRight.Y = -20.0f;
+            PlayerBottom.X = 0.0f, PlayerBottom.Y = 0.0f;
+            Model.Vertices[0] = PlayerLeft, Model.Vertices[1] = PlayerTop, Model.Vertices[2] = PlayerRight, Model.Vertices[3] = PlayerBottom;
 
             ColorTriple PlayerColor;
             PlayerColor.Red = 100, PlayerColor.Blue = 100, PlayerColor.Green = 100;
             Model.Color = PlayerColor;
             Player.Model = &Model;
-            Player.X_Momentum = 0.0f;
-            Player.Y_Momentum = 0.0f;
-            Vec2 mp = {};
-            mp.X = 20, mp.Y = 20;
-            Player.Midpoint = mp;
+
+            // This value currently is fixed and does not change
+            Player.AngularMomentum = 0.1f; 
             
             SoundOutputParams SoundParams = {};
 
