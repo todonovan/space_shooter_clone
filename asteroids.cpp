@@ -5,123 +5,132 @@
 
 #include "platform.h"
 
-struct Vec2
+struct vec_2
 {
     float X;
     float Y;
 };
 
-struct ColorTriple
+struct color_triple
 {
     uint8_t Red;
     uint8_t Blue;
     uint8_t Green;
 };
 
-struct PlayerModel
+struct player_model
 {
-    Vec2 Vertices[4];
-    ColorTriple Color;
+    vec_2 StartVertices[4];
+    vec_2 DrawVertices[4];
+    color_triple Color;
     float LineWidth;
 };
 
-struct PlayerObject
+struct player_object
 {
-    PlayerModel *Model;
-    Vec2 Midpoint;
+    player_model *Model;
+    vec_2 Midpoint;
     float X_Momentum;
     float Y_Momentum;
+    float OffsetAngle;
     float AngularMomentum;
 };
 
-void ClearBuffer()
+struct game_memory
 {
-    if (!BitmapMemory) return;
-	ZeroMemory(BitmapMemory, BitmapHeight * BitmapWidth * 4);
+    uint32_t PersistStorageSize;
+    void *PersistStorage;
+    uint32_t TransientStorageSize;
+    void *TransientStorage;
+};
+
+static game_memory GameMemory;
+
+inline void ClearOffscreenBuffer(platform_bitmap_buffer *OffscreenBuffer)
+{
+    if (!(OffscreenBuffer->Memory)) return;
+	ZeroMemory(OffscreenBuffer->BitmapMemory, OffscreenBuffer->Height * OffscreenBuffer->Width * 4);
 }
 
-void SetPixelInBuffer(Vec2 *Coords, ColorTriple *Colors, int WindowWidth, int WindowHeight)
+void SetPixelInBuffer(platform_bitmap_buffer *Buffer, vec_2 *Coords, color_triple *Colors, float Brightness, int WindowWidth, int WindowHeight)
 {
-    if (!BitmapMemory) return;
+    if (!(Buffer->Memory)) return;
     int X = (Coords->X < 0) ? ((int)Coords->X + WindowWidth) : ((int)Coords->X % WindowWidth);
     int Y = (Coords->Y < 0) ? ((int)Coords->Y + WindowHeight) : ((int)Coords->Y % WindowHeight);
 
-    uint8_t *Pixel = (uint8_t *)((char *)BitmapMemory + (Y * BitmapWidth * 4) + (X * 4));
+    uint8_t *Pixel = (uint8_t *)((char *)(Buffer->Memory) + (Y * Buffer->Width * 4) + (X * 4));
 
-    *Pixel = Colors->Blue;
+    *Pixel = (uint8_t)((Colors->Blue) * Brightness);
     Pixel++;
-    *Pixel = Colors->Green;
+    *Pixel = (uint8_t)((Colors->Green) * Brightness);
     Pixel++;
-    *Pixel = Colors->Red;
+    *Pixel = (uint8_t)((Colors->Red) * Brightness);
 }
 
 /// TODO!! Restore the actual width capabilities (e.g., reducing brightness incrementally further away pixel is from center of line)
-void DrawLineWidth(Vec2 *Point1, Vec2 *Point2, ColorTriple *Color, int WindowWidth, int WindowHeight)
-{ 
+void DrawLineWidth(platform_bitmap_buffer *Buffer, vec_2 *Point1, vec_2 *Point2, color_triple *Color, int WindowWidth, int WindowHeight)
+{
     int x0 = Point1->X;
     int x1 = Point2->X;
     int y0 = Point1->Y;
     int y1 = Point2->Y;
     float wd = LineWidth;
-    int dx = abs(x1-x0), sx = x0 < x1 ? 1 : -1; 
-    int dy = abs(y1-y0), sy = y0 < y1 ? 1 : -1; 
-    int err = dx-dy, e2, x2, y2;  
+    int dx = abs(x1-x0), sx = x0 < x1 ? 1 : -1;
+    int dy = abs(y1-y0), sy = y0 < y1 ? 1 : -1;
+    int err = dx-dy, e2, x2, y2;
     float ed = dx+dy == 0 ? 1 : sqrt((float)dx*dx+(float)dy*dy);
 
 
     for (wd = (wd+1)/2; ; )
-    {                                   
-        Vec2 Coords;
+    {
+        vec_2 Coords;
         Coords.X = x0;
         Coords.Y = y0;
         // To restore the anti-aliasing, this proc would have to take a param
         // that represented the amount to scale down the 'brightness' of the pixel.
-        SetPixelInBuffer(&Coords, Color, WindowWidth, WindowHeight);
+        SetPixelInBuffer(Buffer, &Coords, Color, max(0,100*(abs(err-dx+dy)/ed-wd+1)), WindowWidth, WindowHeight);
         e2 = err; x2 = x0;
         if (2*e2 >= -dx)
         {
             for (e2 += dy, y2 = y0; e2 < ed*wd && (y1 != y2 || dx > dy); e2 += dx)
             {
-                Vec2 Coords2;
+                vec_2 Coords2;
                 Coords2.X = x0;
                 Coords2.Y = y2 += sy;
-                
-                SetPixelInBuffer(&Coords2, Color, WindowWidth, WindowHeight);
-            }            
+
+                SetPixelInBuffer(Buffer, &Coords2, Color, max(0,100*(abs(err-dx+dy)/ed-wd+1)), WindowWidth, WindowHeight);
+            }
             if (x0 == x1) break;
-            e2 = err; err -= dy; x0 += sx; 
-        } 
+            e2 = err; err -= dy; x0 += sx;
+        }
         if (2*e2 <= dy)
         {
             for (e2 = dx-e2; e2 < ed*wd && (x1 != x2 || dx < dy); e2 += dy)
             {
-                Vec2 Coords2;
+                vec_2 Coords2;
                 Coords2.X = x2 += sx;
                 Coords2.Y = y0;
-                SetPixelInBuffer(&Coords2, Color, WindowWidth, WindowHeight);
+                SetPixelInBuffer(Buffer, &Coords2, Color, max(0,100*(abs(err-dx+dy)/ed-wd+1)), WindowWidth, WindowHeight);
             }
             if (y0 == y1) break;
-            err += dx; y0 += sy; 
+            err += dx; y0 += sy;
         }
     }
 }
 
-void RotatePlayerModel(bool CounterClockwise)
+player_model SetPlayerModelForDraw(player_object *Player)
 {
-    char RotateSign = 1;
-    if (!CounterClockwise) RotateSign *= -1;
-
+    float Theta = Player->OffsetAngle;
     for (int i = 0; i < 4; ++i)
     {
-        float Theta = Player.AngularMomentum * RotateSign;
-        float X_Orig = Player.Model->Vertices[i].X;
-        float Y_Orig = Player.Model->Vertices[i].Y;
-        Player.Model->Vertices[i].X = (X_Orig * cos(Theta)) - (Y_Orig * sin(Theta));
-        Player.Model->Vertices[i].Y = (X_Orig * sin(Theta)) + (Y_Orig * cos(Theta));
+        float X_Orig = Player->Model->StartVertices[i].X;
+        float Y_Orig = Player->Model->StartVertices[i].Y;
+        Player->Model->DrawVertices[i].X = (X_Orig * cos(Theta)) - (Y_Orig * sin(Theta));
+        Player->Model->DrawVertices[i].Y = (X_Orig * sin(Theta)) + (Y_Orig * cos(Theta));
     }
 }
 
-void HandlePlayerEdgeWarping(int WindowWidth, int WindowHeight)
+inline void HandlePlayerEdgeWarping(int WindowWidth, int WindowHeight)
 {
     if (Player.Midpoint.X < 0)
     {
@@ -141,12 +150,21 @@ void HandlePlayerEdgeWarping(int WindowWidth, int WindowHeight)
     }
 }
 
-void DrawPlayer(int WindowWidth, int WindowHeight)
+// To consider -- remove the hacky DrawVertices[] from model, simply handle
+// the rotation here prior to draw.
+// Consider -- will we want the true location of the player's vertices stored
+// for things like collision detection? May want to keep even though DrawVertices[]
+// seems like a strange solution.
+// Rebuttal -- if we need the actual vertices, post-rota, stored, is storing the angle
+// of offset and recomputing rotation each frame still the appropriate method?
+// Maybe just do both. Store the angle of offset (for things like laser spawning) and
+// simply recompute the draw vertices each time from the start vertices.
+void DrawPlayerModelInBuffer(int WindowWidth, int WindowHeight)
 {
     if (!BitmapMemory) return;
 
     int cur = 0, next = 1;
-    Vec2 Cur, Next;
+    vec_2 Cur, Next;
 
     for (int i = 0; i < 3; ++i)
     {
@@ -215,17 +233,20 @@ void UpdateGameState(XINPUT_GAMEPAD *Controller, long WindowWidth, long WindowHe
     }
     if (PlayerInput.LTrigger_Pressed)
     {
-        RotatePlayerModel(true);
+        Player.OffsetAngle += Player.AngularMomentum;
     }
     if (PlayerInput.RTrigger_Pressed)
     {
-        RotatePlayerModel(false);
+        Player.OffsetAngle -= Player.AngularMomentum;
     }
-    
+
     Player.X_Momentum += (PlayerInput.NormalizedLX * PlayerInput.Magnitude) * .5f;
     Player.Y_Momentum += (PlayerInput.NormalizedLY * PlayerInput.Magnitude) * .5f;
 
-    Player.Midpoint.X += Player.X_Momentum;
-    Player.Midpoint.Y += Player.Y_Momentum;
+    Player->Midpoint.X += Player->X_Momentum;
+    Player->Midpoint.Y += Player->Y_Momentum;
+
     HandlePlayerEdgeWarping(WindowWidth, WindowHeight);
+    SetPlayerModelForDraw(Player);
+    DrawPlayerModelInBuffer();
 }

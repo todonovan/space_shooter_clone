@@ -11,8 +11,8 @@
 - Game window info? probably not
 */
 
-struct PlatformBitmapBuffer;
-struct PlatformSoundBuffer;
-struct PlatformPlayerInput;
+struct platform_bitmap_buffer;
+struct platform_sound_buffer;
+struct platform_player_input;
 
 #endif /* PLATFORM_H */

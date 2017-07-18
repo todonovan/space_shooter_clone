@@ -18,7 +18,7 @@ struct InternalGameWindow
     uint16_t Height;
 };
 
-struct PlatformBitmapBuffer
+struct platform_bitmap_buffer
 {
     BITMAPINFO InfoHeader;
     void *Memory;
@@ -28,7 +28,7 @@ struct PlatformBitmapBuffer
     uint32_t BytesPerPixel;
 };
 
-struct PlatformPlayerInput
+struct platform_player_input
 {
     float Magnitude;
     float NormalizedLX;
@@ -40,7 +40,7 @@ struct PlatformPlayerInput
     bool Start_Pressed;
 };
 
-struct PlatformSoundBuffer
+struct platform_sound_buffer
 {
     LPDIRECTSOUNDBUFFER Memory;
     int SamplesPerSecond;
@@ -55,8 +55,8 @@ struct PlatformSoundBuffer
 
 static int64_t PerfCountFrequency;
 
-static PlatformSoundBuffer GlobalSecondaryBuffer;
-static PlatformBitmapBuffer GlobalBackbuffer;
+static platform_sound_buffer GlobalSecondaryBuffer;
+static platform_bitmap_buffer GlobalBackbuffer;
 
 void GetWindowDimension(InternalGameWindow *WinStruct)
 {
@@ -87,18 +87,18 @@ void ResizeDIBSection(int Width, int Height)
 }
 
 void DrawToWindow(InternalGameWindow *WinStruct)HDC WindowDC, RECT *WindowRect, int Width, int Height)
-{   
+{
     StretchDIBits(WinStruct->DeviceContext, 0, 0, WinStruct->Width, WinStruct->Height, 0, 0, WinStruct->Width,
                   WinStruct->Height, GlobalBackbuffer->Memory, &(GlobalBackbuffer->BitmapInfo), DIB_RGB_COLORS, SRCCOPY);
 }
 
-PlatformPlayerInput GetControllerInput(DWORD ControllerNumber)
+platform_player_input GetControllerInput(DWORD ControllerNumber)
 {
     XINPUT_STATE ControllerState;
-    PlatformPlayerInput PlayerInput = {};
+    platform_player_input PlayerInput = {};
     if (XInputGetState(ControllerNumber, &ControllerState) == ERROR_SUCCESS)
     {
-        
+
     }
     else
     {
@@ -122,13 +122,13 @@ void InitDirectSound(HWND Window, int BufferSize, int SamplesPerSecond)
     if (SUCCEEDED(DirectSoundCreate(0, &DirectSound, 0)))
     {
         DirectSound->SetCooperativeLevel(Window, DSSCL_PRIORITY);
-        
+
         // Initialize primary buffer.
         DSBUFFERDESC PrimaryBufferDesc = {};
         PrimaryBufferDesc.dwSize = sizeof(PrimaryBufferDesc);
         PrimaryBufferDesc.dwFlags = DSBCAPS_PRIMARYBUFFER;
-        
-        
+
+
         LPDIRECTSOUNDBUFFER PrimaryBuffer;
         if (SUCCEEDED(DirectSound->CreateSoundBuffer(&PrimaryBufferDesc, &PrimaryBuffer, 0)))
         {
@@ -191,7 +191,7 @@ void FillSoundBuffer(PlatformSoundOutputParams *SoundParams, DWORD ByteToLock, D
 
         SoundOut = (int16_t *)AudioPtr2;
         for (DWORD i = 0; i < AudioRegion2SampleCount; ++i)
-        {   
+        {
             float t = 2.0f * 3.14159 * (static_cast<float>(SoundParams->SampleIndex) / static_cast<float>(SoundParams->WavePeriod));
             float SineValue = sinf(t);
             int16_t Sample = (int16_t)(SineValue * SoundParams->Volume);
@@ -199,7 +199,7 @@ void FillSoundBuffer(PlatformSoundOutputParams *SoundParams, DWORD ByteToLock, D
             *SoundOut++ = Sample;
             SoundParams->SampleIndex++;
         }
-        
+
         GlobalSecondaryBuffer->Unlock(AudioPtr1, AudioBytes1, AudioPtr2, AudioBytes2);
     }
 }
@@ -315,31 +315,31 @@ int CALLBACK WinMain(HINSTANCE Instance,
         if (WindowHandle)
         {
             Player = {};
-            PlayerModel Model = {};
-            BlackBrush = CreateSolidBrush(RGB(0,0,0));
-            LineWidth = 3.0f;
+            player_model Model = {};
+            Model.LineWidth = 3.0f;
             RECT WinRect;
             GetClientRect(WindowHandle, &WinRect);
-            
-            Vec2 Midpoint = {};
+
+            vec_2 Midpoint = {};
             Midpoint.X = WinRect.right / 2;
             Midpoint.Y = WinRect.bottom / 10;
             Player.Midpoint = Midpoint;
-            Vec2 PlayerLeft, PlayerTop, PlayerRight, PlayerBottom;
+            vec_2 PlayerLeft, PlayerTop, PlayerRight, PlayerBottom;
             PlayerLeft.X = -20.0f, PlayerLeft.Y = -20.0f;
             PlayerTop.X = 0.0f, PlayerTop.Y = 40.0f;
             PlayerRight.X = 20.0f, PlayerRight.Y = -20.0f;
             PlayerBottom.X = 0.0f, PlayerBottom.Y = 0.0f;
-            Model.Vertices[0] = PlayerLeft, Model.Vertices[1] = PlayerTop, Model.Vertices[2] = PlayerRight, Model.Vertices[3] = PlayerBottom;
+            Model.StartVertices[0] = PlayerLeft, Model.StartVertices[1] = PlayerTop, Model.StartVertices[2] = PlayerRight, Model.StartVertices[3] = PlayerBottom;
+            Model.DrawVertices[0] = PlayerLeft, Model.DrawVertices[1] = PlayerTop, Model.DrawVertices[2] = PlayerRight, Model.DrawVertices[3] = PlayerBottom;
 
-            ColorTriple PlayerColor;
+            color_triple PlayerColor;
             PlayerColor.Red = 100, PlayerColor.Blue = 100, PlayerColor.Green = 100;
             Model.Color = PlayerColor;
             Player.Model = &Model;
 
             // This value currently is fixed and does not change
-            Player.AngularMomentum = 0.1f; 
-            
+            Player.AngularMomentum = 0.1f;
+
             PlatformSoundOutputParams SoundParams = {};
 
             SoundParams.SoundHz = 256;
@@ -356,7 +356,7 @@ int CALLBACK WinMain(HINSTANCE Instance,
             GlobalSecondaryBuffer->Play(0, 0, DSBPLAY_LOOPING);
 
             LARGE_INTEGER LastCounter = GetWallClock();
-            
+
 			uint64_t LastCPUCycleCount = __rdtsc();
 
             for (;;)
@@ -373,7 +373,7 @@ int CALLBACK WinMain(HINSTANCE Instance,
                 }
                 // TODO: Include timedelta/mechanisms for enforcing limited frame rate
                 GameTick(WindowHandle);
-                
+
                 DWORD PlayCursor, WriteCursor;
                 if (SUCCEEDED(GlobalSecondaryBuffer->GetCurrentPosition(&PlayCursor, &WriteCursor)))
                 {
@@ -389,15 +389,15 @@ int CALLBACK WinMain(HINSTANCE Instance,
                     {
                         NumBytes = TargetCursor - SampleIndexToLock;
                     }
-                    FillSoundBuffer(&SoundParams, SampleIndexToLock, NumBytes);                    
-                }                
-                
+                    FillSoundBuffer(&SoundParams, SampleIndexToLock, NumBytes);
+                }
+
 				uint64_t EndCPUCycleCount = __rdtsc();
 
-				LARGE_INTEGER WorkCounter = GetWallClock();			
+				LARGE_INTEGER WorkCounter = GetWallClock();
 
 				int64_t CPUCyclesElapsed = EndCPUCycleCount - LastCPUCycleCount;
-                
+
                 float SecondsElapsedForCompute = GetSecondsElapsed(LastCounter, WorkCounter);
 
                 float SecondsElapsedForFrame = SecondsElapsedForCompute;
@@ -430,7 +430,7 @@ int CALLBACK WinMain(HINSTANCE Instance,
 				LastCPUCycleCount = EndCPUCycleCount;
             }
         }
-    }   
+    }
 
     return 0;
 }
