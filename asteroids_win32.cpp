@@ -116,7 +116,7 @@ platform_player_input GetPlayerInput(DWORD ControllerNumber)
         float magnitude = sqrt((LX * LX) + (LY * LY));
         PlayerInput.NormalizedLX = LX / magnitude;
         PlayerInput.NormalizedLY = LY / magnitude;
-        
+
         float normalizedMagnitude = 0.0f;
         if (magnitude > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE)
         {
@@ -141,7 +141,7 @@ platform_player_input GetPlayerInput(DWORD ControllerNumber)
         PlayerInput.RTrigger_Pressed = (ControllerState.Gamepad.bRightTrigger > 50);
         PlayerInput.Start_Pressed = (ControllerState.Gamepad.wButtons & XINPUT_GAMEPAD_START);
     }
-    
+
     return PlayerInput;
 }
 
@@ -186,17 +186,6 @@ void InitDirectSound(int BufferSize, int SamplesPerSecond)
         }
     }
 }
-
-/* As Windows will only ping us when there are messages to send, we
-must set up a game loop outside of the window callback. Each time
-through the WinMain loop, we will handle all Windows-related messages
-first, then enter GameTick(), where our controller state will be
-procured, our game state will be udpated, and the scene will be
-rendered/blitted. WinMain must (eventually) implement the concept of a
-frame rate/time delta, in order to allow for appropriate updates, as
-well as to ensure we don't melt any CPUs. That delta will eventually
-be passed to GameTick(), as well as the required HWND for blitting purposes. */
-
 
 void FillSoundBuffer(DWORD ByteToLock, DWORD BytesToWrite)
 {
@@ -306,13 +295,13 @@ float GetSecondsElapsed(LARGE_INTEGER StartTime, LARGE_INTEGER EndTime)
     return Result;
 }
 
-/* The graphical entry point for Windows. */
+// The graphical entry point for Windows.
 int CALLBACK WinMain(HINSTANCE Instance,
                      HINSTANCE PrevInstance,
                      LPSTR CommandLine,
                      int CommandShow)
 {
-    WNDCLASS WindowClass = {}; // Ensure the struct is zeroed.
+    WNDCLASS WindowClass = {};
     WindowClass.style = CS_HREDRAW | CS_VREDRAW;
     WindowClass.lpfnWndProc = &AsteroidsWindowCallback;
     WindowClass.hInstance = Instance;
@@ -338,11 +327,9 @@ int CALLBACK WinMain(HINSTANCE Instance,
         {
             // Initialize window and bitmap buffer.
             GameWindow = {};
-            GameWindow.WindowHandle = WindowHandle;            
+            GameWindow.WindowHandle = WindowHandle;
             ResizeDIBSection(1280, 720);
 
-            // Hacky code to init player, will be moved
-            
 
             // Initialize DirectSound (secondary) buffer.
             GlobalSoundBuffer = {};
@@ -360,7 +347,7 @@ int CALLBACK WinMain(HINSTANCE Instance,
             FillSoundBuffer(0, GlobalSoundBuffer.LatencySampleCount * GlobalSoundBuffer.BytesPerSample);
             GlobalSoundBuffer.SecondaryBuffer->Play(0, 0, DSBPLAY_LOOPING);
 
-            
+
             // Initialize timing code.
             LARGE_INTEGER LastCounter = GetWallClock();
 			uint64_t LastCPUCycleCount = __rdtsc();
@@ -373,8 +360,8 @@ int CALLBACK WinMain(HINSTANCE Instance,
             /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
              * Game loop:                                              *
              *    1. Handle all Windows messages from queue            *
-             *    2. Clear the offscreen buffer                        *
-             *    3. Retrieve input from controller                    *
+             *    2. Retrieve input from controller                    *
+             *    3. Clear the offscreen buffer                        *
              *    4. Call into game code with appropriate parameters   *
              *    5. Flip the bitmap buffer to Windows                 *
              *    6. Update timing monitors                            *
@@ -397,20 +384,20 @@ int CALLBACK WinMain(HINSTANCE Instance,
                     // Per MSDN: Translates virtual-key messages into character messages.
                     // If the msg is a virtual-key msg, it is translated and reposted to
                     // the queue. The current msg, however, is NOT modified -- a new one
-                    // is created. 
+                    // is created.
                     TranslateMessage(&Message);
 
                     // Sends the message to the defined window callback.
                     DispatchMessage(&Message);
                 }
-                
+
                 ClearOffscreenBuffer();
                 LastInput = CurrentInput;
                 CurrentInput = GetPlayerInput(0);
                 UpdateGameAndRender(&GlobalBackbuffer, &GlobalSoundBuffer, &CurrentInput);
                 HDC WindowDC = GetDC(GameWindow.WindowHandle);
                 DrawToWindow(WindowDC);
-                ReleaseDC(GameWindow.WindowHandle, GameWindow.DeviceContext);
+                ReleaseDC(GameWindow.WindowHandle, WindowDC);
 
                 DWORD PlayCursor, WriteCursor;
                 if (SUCCEEDED(GlobalSoundBuffer.SecondaryBuffer->GetCurrentPosition(&PlayCursor, &WriteCursor)))

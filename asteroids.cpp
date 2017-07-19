@@ -47,6 +47,7 @@ struct game_memory
 
 static game_memory GameMemory;
 static player_object Player;
+static player_model Model;
 static bool GameMemoryInitialized = false;
 
 // Note that this may not be portable, as it relies upon the way Windows structures
@@ -188,7 +189,9 @@ void UpdateGameAndRender(platform_bitmap_buffer *OffscreenBuffer, platform_sound
     {
         // Initialize game memory here!
         Player = {};
-        Player->Model.LineWidth = 3.0f;
+        Model = {};
+        Player.Model = &Model;
+        Player.Model.LineWidth = 3.0f;
 
         Player.Midpoint.X = OffscreenBuffer->Width / 2;
         Player.Midpoint.Y = OffscreenBuffer->Height / 10;
