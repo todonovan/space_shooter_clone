@@ -42,10 +42,12 @@ struct game_memory
     void *PersistStorage;
     uint32_t TransientStorageSize;
     void *TransientStorage;
+    bool Initialized;
 };
 
 static game_memory GameMemory;
 static player_object Player;
+static bool GameMemoryInitialized = false;
 
 // Note that this may not be portable, as it relies upon the way Windows structures
 // bitmap data in memory.
@@ -55,17 +57,17 @@ void SetPixelInBuffer(platform_bitmap_buffer *Buffer, vec_2 *Coords, color_tripl
     int X = (Coords->X < 0) ? ((int)Coords->X + Buffer->Width) : ((int)Coords->X % Buffer->Width);
     int Y = (Coords->Y < 0) ? ((int)Coords->Y + Buffer->Height) : ((int)Coords->Y % Buffer->Height);
 
-    uint32_t *Pixel = (uint32_t *)((char *)(Buffer->Memory) + (Y * Buffer->Width * 4) + (X * 4));
+    uint8_t *Pixel = (uint8_t *)((char *)(Buffer->Memory) + (Y * Buffer->Width * 4) + (X * 4));
 
-    uint8_t Blue  = (Colors->Blue * Brightness);
-    uint8_t Red   = (Colors->Red * Brightness);
-    uint8_t Green = (Colors->Green * Brightness);
-
-    *Pixel = ((Red << 16) | (Green << 8) | Blue);
+    *Pixel = (Colors->Blue * Brightness);
+    Pixel++;
+    *Pixel = (Colors->Green * Brightness);
+    Pixel++;
+    *Pixel = (Colors->Red * Brightness);
 }
 
 /// TODO!! Restore the actual width capabilities (e.g., reducing brightness incrementally further away pixel is from center of line)
-void DrawLineWidth(platform_bitmap_buffer *Buffer, vec_2 *Point1, vec_2 *Point2, color_triple *Color)
+void DrawLineWidth(platform_bitmap_buffer *Buffer, vec_2 *Point1, vec_2 *Point2, color_triple *Color, float LineWidth)
 {
     int x0 = Point1->X;
     int x1 = Point2->X;
@@ -115,15 +117,15 @@ void DrawLineWidth(platform_bitmap_buffer *Buffer, vec_2 *Point1, vec_2 *Point2,
     }
 }
 
-player_model SetPlayerModelForDraw(player_object *Player)
+void SetPlayerModelForDraw()
 {
-    float Theta = Player->OffsetAngle;
+    float Theta = Player.OffsetAngle;
     for (int i = 0; i < 4; ++i)
     {
-        float X_Orig = Player->Model->StartVertices[i].X;
-        float Y_Orig = Player->Model->StartVertices[i].Y;
-        Player->Model->DrawVertices[i].X = (X_Orig * cos(Theta)) - (Y_Orig * sin(Theta));
-        Player->Model->DrawVertices[i].Y = (X_Orig * sin(Theta)) + (Y_Orig * cos(Theta));
+        float X_Orig = Player.Model->StartVertices[i].X;
+        float Y_Orig = Player.Model->StartVertices[i].Y;
+        Player.Model->DrawVertices[i].X = (X_Orig * cos(Theta)) - (Y_Orig * sin(Theta));
+        Player.Model->DrawVertices[i].Y = (X_Orig * sin(Theta)) + (Y_Orig * cos(Theta));
     }
 }
 
@@ -158,7 +160,7 @@ inline void HandlePlayerEdgeWarping(int Width, int Height)
 // simply recompute the draw vertices each time from the start vertices.
 void DrawPlayerModelInBuffer(platform_bitmap_buffer *Buffer)
 {
-    if (!(Buffer->BitmapMemory)) return;
+    if (!(Buffer->Memory)) return;
 
     int cur = 0, next = 1;
     vec_2 Cur, Next;
@@ -169,52 +171,66 @@ void DrawPlayerModelInBuffer(platform_bitmap_buffer *Buffer)
         Cur.Y = Player.Model->DrawVertices[cur].Y + Player.Midpoint.Y;
         Next.X = Player.Model->DrawVertices[next].X + Player.Midpoint.X;
         Next.Y = Player.Model->DrawVertices[next].Y + Player.Midpoint.Y;
-        DrawLineWidth(Buffer, &Cur, &Next, &(Player.Model->Color));
+        DrawLineWidth(Buffer, &Cur, &Next, &(Player.Model->Color), Player.Model->LineWidth);
         ++cur;
         if (i < 2) ++next;
     }
-    Cur.X = Player.Model->Vertices[cur].X + Player.Midpoint.X;
-    Cur.Y = Player.Model->Vertices[cur].Y + Player.Midpoint.Y;
-    Next.X = Player.Model->Vertices[0].X + Player.Midpoint.X;
-    Next.Y = Player.Model->Vertices[0].Y + Player.Midpoint.Y;
-    DrawLineWidth(Buffer, &Cur, &Next, &(Player.Model->Color));
-}
-
-void RenderGame(HWND WindHandle, HDC WindowDC)
-{
-    ClearBuffer();
-    RECT ClientRect;
-    GetClientRect(WindHandle, &ClientRect);
-    int Width = ClientRect.right - ClientRect.left, Height = ClientRect.bottom - ClientRect.top;
-    DrawToWindow(WindowDC, &ClientRect, Width, Height);
+    Cur.X = Player.Model->DrawVertices[cur].X + Player.Midpoint.X;
+    Cur.Y = Player.Model->DrawVertices[cur].Y + Player.Midpoint.Y;
+    Next.X = Player.Model->DrawVertices[0].X + Player.Midpoint.X;
+    Next.Y = Player.Model->DrawVertices[0].Y + Player.Midpoint.Y;
+    DrawLineWidth(Buffer, &Cur, &Next, &(Player.Model->Color), Player.Model->LineWidth);
 }
 
 void UpdateGameAndRender(platform_bitmap_buffer *OffscreenBuffer, platform_sound_buffer *SoundBuffer, platform_player_input *PlayerInput)
 {
-    if (PlayerInput.Start_Pressed)
+    if (!GameMemoryInitialized)
+    {
+        // Initialize game memory here!
+        Player = {};
+        Player->Model.LineWidth = 3.0f;
+
+        Player.Midpoint.X = OffscreenBuffer->Width / 2;
+        Player.Midpoint.Y = OffscreenBuffer->Height / 10;
+        vec_2 PlayerLeft, PlayerTop, PlayerRight, PlayerBottom;
+        PlayerLeft.X = -20.0f, PlayerLeft.Y = -20.0f;
+        PlayerTop.X = 0.0f, PlayerTop.Y = 40.0f;
+        PlayerRight.X = 20.0f, PlayerRight.Y = -20.0f;
+        PlayerBottom.X = 0.0f, PlayerBottom.Y = 0.0f;
+        Player->Model.StartVertices[0] = PlayerLeft, Player->Model.StartVertices[1] = Player->PlayerTop, Player->Model.StartVertices[2] = PlayerRight, Player->Model.StartVertices[3] = PlayerBottom;
+		Player->Model.DrawVertices[0] = PlayerLeft, Player->Model.DrawVertices[1] = Player->PlayerTop, Player->Model.DrawVertices[2] = PlayerRight, Player->Model.DrawVertices[3] = PlayerBottom;
+
+		Player->Model.Color.Red = 100, Player->Model.Color.Blue = 100, Player->Model.Color.Green = 100;
+
+        // This value currently is fixed and does not change
+        Player.AngularMomentum = 0.1f;
+		GameMemoryInitialized = true;
+    }
+
+    if (PlayerInput->Start_Pressed)
     {
         PostQuitMessage(0);
     }
-    if (PlayerInput.B_Pressed)
+    if (PlayerInput->B_Pressed)
     {
         Player.Model->Color.Red = 0, Player.Model->Color.Blue = 200;
     }
-    if (PlayerInput.LTrigger_Pressed)
+    if (PlayerInput->LTrigger_Pressed)
     {
         Player.OffsetAngle += Player.AngularMomentum;
     }
-    if (PlayerInput.RTrigger_Pressed)
+    if (PlayerInput->RTrigger_Pressed)
     {
         Player.OffsetAngle -= Player.AngularMomentum;
     }
 
-    Player.X_Momentum += (PlayerInput.NormalizedLX * PlayerInput.Magnitude) * .5f;
-    Player.Y_Momentum += (PlayerInput.NormalizedLY * PlayerInput.Magnitude) * .5f;
+    Player.X_Momentum += (PlayerInput->NormalizedLX * PlayerInput->Magnitude) * .5f;
+    Player.Y_Momentum += (PlayerInput->NormalizedLY * PlayerInput->Magnitude) * .5f;
 
-    Player->Midpoint.X += Player->X_Momentum;
-    Player->Midpoint.Y += Player->Y_Momentum;
+    Player.Midpoint.X += Player.X_Momentum;
+    Player.Midpoint.Y += Player.Y_Momentum;
 
     HandlePlayerEdgeWarping(OffscreenBuffer->Width, OffscreenBuffer->Height);
-    SetPlayerModelForDraw(Player);
-    DrawPlayerModelInBuffer();
+    SetPlayerModelForDraw();
+    DrawPlayerModelInBuffer(OffscreenBuffer);
 }

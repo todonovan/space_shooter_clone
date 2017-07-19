@@ -29,7 +29,7 @@ struct platform_bitmap_buffer
 
 struct platform_player_input
 {
-    float NormalizedMagnitude;
+    float Magnitude;
     float NormalizedLX;
     float NormalizedLY;
     bool A_Pressed;
@@ -41,7 +41,7 @@ struct platform_player_input
 
 struct platform_sound_buffer
 {
-    LPDIRECTSOUNDBUFFER Memory;
+    LPDIRECTSOUNDBUFFER SecondaryBuffer;
     int SamplesPerSecond;
     int SoundHz;
     int16_t Volume;
@@ -56,7 +56,7 @@ struct platform_sound_buffer
 
 static int64_t PerfCountFrequency;
 
-static platform_sound_buffer GlobalSecondaryBuffer;
+static platform_sound_buffer GlobalSoundBuffer;
 static platform_bitmap_buffer GlobalBackbuffer;
 static internal_game_window GameWindow;
 
@@ -64,44 +64,44 @@ void UpdateWindowDimensions(HWND WindowHandle)
 {
     GameWindow.WindowHandle = WindowHandle;
     GameWindow.ClientRect = {};
-    GetClientRect(GameWindow.WindowHandow, &(GameWindow.ClientRect));
-    GameWindow.Width = GameWindow.ClientRect.right - GameWindow.ClientRect.left;
-    GameWindow.Height = GameWindow.ClientRect.bottom - GameWindow.ClientRect.top; // Negative to ensure top-down DIB
+    GetClientRect(GameWindow.WindowHandle, &(GameWindow.ClientRect));
+    GameWindow.Width = GameWindow.ClientRect.right;
+    GameWindow.Height = GameWindow.ClientRect.bottom;
 }
 
 void ResizeDIBSection(int Width, int Height)
 {
-    if (GlobalBackbuffer.BitmapMemory)
+    if (GlobalBackbuffer.Memory)
     {
-        VirtualFree(BitmapMemory, 0, MEM_RELEASE);
+        VirtualFree(GlobalBackbuffer.Memory, 0, MEM_RELEASE);
     }
 
     GlobalBackbuffer.Width = Width;
     GlobalBackbuffer.Height = Height;
 
     GlobalBackbuffer.InfoStruct.bmiHeader.biSize = sizeof(GlobalBackbuffer.InfoStruct.bmiHeader);
-    GlobalBackbuffer.InfoStruct.bmiHeader.biWidth = BitmapWidth;
-    GlobalBackbuffer.InfoStruct.bmiHeader.biHeight = -BitmapHeight;
+    GlobalBackbuffer.InfoStruct.bmiHeader.biWidth = GlobalBackbuffer.Width;
+    GlobalBackbuffer.InfoStruct.bmiHeader.biHeight = -GlobalBackbuffer.Height; // Negative to ensure top-down DIB
     GlobalBackbuffer.InfoStruct.bmiHeader.biPlanes = 1;
     GlobalBackbuffer.InfoStruct.bmiHeader.biBitCount = 32;
     GlobalBackbuffer.InfoStruct.bmiHeader.biCompression = BI_RGB;
     GlobalBackbuffer.BytesPerPixel = 4; // 4 bytes per pixel to keep dword aligned
     GlobalBackbuffer.Pitch = Width * GlobalBackbuffer.BytesPerPixel;
-    int BitmapMemorySize = GlobalBackbuffer.BitmapWidth * GlobalBackbuffer.Height * GlobalBackbuffer.BytesPerPixel;
+    int BitmapMemorySize = GlobalBackbuffer.Width * GlobalBackbuffer.Height * GlobalBackbuffer.BytesPerPixel;
 
-    GlobalBackbuffer.BitmapMemory = VirtualAlloc(0, BitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
+    GlobalBackbuffer.Memory = VirtualAlloc(0, BitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
 }
 
 inline void ClearOffscreenBuffer()
 {
-    if (!(GlobalBackbuffer->Memory)) return;
-	ZeroMemory(GlobalBackbuffer->BitmapMemory, GlobalBackbuffer->Height * GlobalBackbuffer->Width * 4);
+    if (!(GlobalBackbuffer.Memory)) return;
+	ZeroMemory(GlobalBackbuffer.Memory, GlobalBackbuffer.Height * GlobalBackbuffer.Width * 4);
 }
 
-void DrawToWindow()
+void DrawToWindow(HDC DrawDC)
 {
-    StretchDIBits(GameWindow.DeviceContext, 0, 0, GameWindow.Width, GameWindow.Height, 0, 0, GlobalBackbuffer.Width,
-                  GlobalBackbuffer.Height, GlobalBackbuffer->Memory, &(GlobalBackbuffer->BitmapInfo), DIB_RGB_COLORS, SRCCOPY);
+    StretchDIBits(DrawDC, 0, 0, GameWindow.Width, GameWindow.Height, 0, 0, GlobalBackbuffer.Width,
+                  GlobalBackbuffer.Height, GlobalBackbuffer.Memory, &(GlobalBackbuffer.InfoStruct), DIB_RGB_COLORS, SRCCOPY);
 }
 
 platform_player_input GetPlayerInput(DWORD ControllerNumber)
@@ -114,8 +114,10 @@ platform_player_input GetPlayerInput(DWORD ControllerNumber)
         float LX = ControllerState.Gamepad.sThumbLX;
         float LY = ControllerState.Gamepad.sThumbLY;
         float magnitude = sqrt((LX * LX) + (LY * LY));
-
-        float normalizedMagnitude;
+        PlayerInput.NormalizedLX = LX / magnitude;
+        PlayerInput.NormalizedLY = LY / magnitude;
+        
+        float normalizedMagnitude = 0.0f;
         if (magnitude > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE)
         {
             if (magnitude > 32767)
@@ -131,24 +133,21 @@ platform_player_input GetPlayerInput(DWORD ControllerNumber)
             normalizedMagnitude = 0.0f;
         }
 
-        PlayerInput.NormalizedMagnitude = normalizedMagnitude;
-        PlayerInput.NormalizedLX = LX / magnitude;
-        PlayerInput.NormalizedLY = LY / magnitude;
+        PlayerInput.Magnitude = normalizedMagnitude;
 
         PlayerInput.A_Pressed = (ControllerState.Gamepad.wButtons & XINPUT_GAMEPAD_A);
         PlayerInput.B_Pressed = (ControllerState.Gamepad.wButtons & XINPUT_GAMEPAD_B);
-        PlayerInput.LTrigger_Pressed = (Controller->bLeftTrigger > 50);
-        PlayerInput.RTrigger_Pressed = (Controller->bRightTrigger > 50);
+        PlayerInput.LTrigger_Pressed = (ControllerState.Gamepad.bLeftTrigger > 50);
+        PlayerInput.RTrigger_Pressed = (ControllerState.Gamepad.bRightTrigger > 50);
         PlayerInput.Start_Pressed = (ControllerState.Gamepad.wButtons & XINPUT_GAMEPAD_START);
     }
     
     return PlayerInput;
 }
 
-void InitDirectSound(HWND Window, int BufferSize, int SamplesPerSecond)
+void InitDirectSound(int BufferSize, int SamplesPerSecond)
 {
     LPDIRECTSOUND DirectSound;
-
     WAVEFORMATEX WaveFormat = {};
     WaveFormat.wFormatTag = WAVE_FORMAT_PCM;
     WaveFormat.nChannels = 2;
@@ -160,7 +159,7 @@ void InitDirectSound(HWND Window, int BufferSize, int SamplesPerSecond)
 
     if (SUCCEEDED(DirectSoundCreate(0, &DirectSound, 0)))
     {
-        DirectSound->SetCooperativeLevel(Window, DSSCL_PRIORITY);
+        DirectSound->SetCooperativeLevel(GameWindow.WindowHandle, DSSCL_PRIORITY);
 
         // Initialize primary buffer.
         DSBUFFERDESC PrimaryBufferDesc = {};
@@ -181,7 +180,7 @@ void InitDirectSound(HWND Window, int BufferSize, int SamplesPerSecond)
         SecondaryBufferDesc.dwBufferBytes = BufferSize;
         SecondaryBufferDesc.lpwfxFormat = &WaveFormat;
 
-        if (SUCCEEDED(DirectSound->CreateSoundBuffer(&SecondaryBufferDesc, &GlobalSecondaryBuffer, 0)))
+        if (SUCCEEDED(DirectSound->CreateSoundBuffer(&SecondaryBufferDesc, &(GlobalSoundBuffer.SecondaryBuffer), 0)))
         {
 
         }
@@ -199,38 +198,38 @@ well as to ensure we don't melt any CPUs. That delta will eventually
 be passed to GameTick(), as well as the required HWND for blitting purposes. */
 
 
-void FillSoundBuffer(PlatformSoundOutputParams *SoundParams, DWORD ByteToLock, DWORD BytesToWrite)
+void FillSoundBuffer(DWORD ByteToLock, DWORD BytesToWrite)
 {
     void *AudioPtr1, *AudioPtr2;
     DWORD AudioBytes1, AudioBytes2;
 
-    if (SUCCEEDED(GlobalSecondaryBuffer->Lock(ByteToLock, BytesToWrite, &AudioPtr1, &AudioBytes1, &AudioPtr2, &AudioBytes2, 0)))
+    if (SUCCEEDED(GlobalSoundBuffer.SecondaryBuffer->Lock(ByteToLock, BytesToWrite, &AudioPtr1, &AudioBytes1, &AudioPtr2, &AudioBytes2, 0)))
     {
         int16_t *SoundOut = (int16_t *)AudioPtr1;
-        DWORD AudioRegion1SampleCount = AudioBytes1/SoundParams->BytesPerSample;
-        DWORD AudioRegion2SampleCount = AudioBytes2/SoundParams->BytesPerSample;
+        DWORD AudioRegion1SampleCount = AudioBytes1/GlobalSoundBuffer.BytesPerSample;
+        DWORD AudioRegion2SampleCount = AudioBytes2/GlobalSoundBuffer.BytesPerSample;
         for (DWORD i = 0; i < AudioRegion1SampleCount; ++i)
         {
-            float t = 2.0f * 3.14159 * (static_cast<float>(SoundParams->SampleIndex) / static_cast<float>(SoundParams->WavePeriod));
+            float t = 2.0f * 3.14159 * (static_cast<float>(GlobalSoundBuffer.SampleIndex) / static_cast<float>(GlobalSoundBuffer.WavePeriod));
             float SineValue = sinf(t);
-            int16_t Sample = (int16_t)(SineValue * SoundParams->Volume);
+            int16_t Sample = (int16_t)(SineValue * GlobalSoundBuffer.Volume);
             *SoundOut++ = Sample;
             *SoundOut++ = Sample;
-            SoundParams->SampleIndex++;
+            GlobalSoundBuffer.SampleIndex++;
         }
 
         SoundOut = (int16_t *)AudioPtr2;
         for (DWORD i = 0; i < AudioRegion2SampleCount; ++i)
         {
-            float t = 2.0f * 3.14159 * (static_cast<float>(SoundParams->SampleIndex) / static_cast<float>(SoundParams->WavePeriod));
+            float t = 2.0f * 3.14159 * (static_cast<float>(GlobalSoundBuffer.SampleIndex) / static_cast<float>(GlobalSoundBuffer.WavePeriod));
             float SineValue = sinf(t);
-            int16_t Sample = (int16_t)(SineValue * SoundParams->Volume);
+            int16_t Sample = (int16_t)(SineValue * GlobalSoundBuffer.Volume);
             *SoundOut++ = Sample;
             *SoundOut++ = Sample;
-            SoundParams->SampleIndex++;
+            GlobalSoundBuffer.SampleIndex++;
         }
 
-        GlobalSecondaryBuffer->Unlock(AudioPtr1, AudioBytes1, AudioPtr2, AudioBytes2);
+        GlobalSoundBuffer.SecondaryBuffer->Unlock(AudioPtr1, AudioBytes1, AudioPtr2, AudioBytes2);
     }
 }
 
@@ -248,7 +247,7 @@ LRESULT CALLBACK AsteroidsWindowCallback(HWND WindHandle,
     {
         case WM_SIZE:
         {
-            UpdateWindowDimensions();
+            UpdateWindowDimensions(WindHandle);
         }
         case WM_PAINT:
         {
@@ -260,7 +259,7 @@ LRESULT CALLBACK AsteroidsWindowCallback(HWND WindHandle,
 			int Width = PaintStruct.rcPaint.right - PaintStruct.rcPaint.left;
 			int Height = PaintStruct.rcPaint.bottom - PaintStruct.rcPaint.top;
 
-			DrawToWindow(PaintDC, &ClientRect, Width, Height);
+			DrawToWindow(PaintDC);
 			EndPaint(WindHandle, &PaintStruct);
 			return 0;
         }
@@ -337,58 +336,56 @@ int CALLBACK WinMain(HINSTANCE Instance,
 
         if (WindowHandle)
         {
+            // Initialize window and bitmap buffer.
             GameWindow = {};
-            GameWindow.WindowHandle = WindowHandle;
-            
+            GameWindow.WindowHandle = WindowHandle;            
             ResizeDIBSection(1280, 720);
-            Player = {};
-            player_model Model = {};
-            Model.LineWidth = 3.0f;
 
-            vec_2 Midpoint = {};
-            Midpoint.X = WinRect.right / 2;
-            Midpoint.Y = WinRect.bottom / 10;
-            Player.Midpoint = Midpoint;
-            vec_2 PlayerLeft, PlayerTop, PlayerRight, PlayerBottom;
-            PlayerLeft.X = -20.0f, PlayerLeft.Y = -20.0f;
-            PlayerTop.X = 0.0f, PlayerTop.Y = 40.0f;
-            PlayerRight.X = 20.0f, PlayerRight.Y = -20.0f;
-            PlayerBottom.X = 0.0f, PlayerBottom.Y = 0.0f;
-            Model.StartVertices[0] = PlayerLeft, Model.StartVertices[1] = PlayerTop, Model.StartVertices[2] = PlayerRight, Model.StartVertices[3] = PlayerBottom;
-            Model.DrawVertices[0] = PlayerLeft, Model.DrawVertices[1] = PlayerTop, Model.DrawVertices[2] = PlayerRight, Model.DrawVertices[3] = PlayerBottom;
+            // Hacky code to init player, will be moved
+            
 
-            color_triple PlayerColor;
-            PlayerColor.Red = 100, PlayerColor.Blue = 100, PlayerColor.Green = 100;
-            Model.Color = PlayerColor;
-            Player.Model = &Model;
+            // Initialize DirectSound (secondary) buffer.
+            GlobalSoundBuffer = {};
 
-            // This value currently is fixed and does not change
-            Player.AngularMomentum = 0.1f;
+            GlobalSoundBuffer.SoundHz = 256;
+            GlobalSoundBuffer.Volume = 1000;
+            GlobalSoundBuffer.SampleIndex = 0;
+            GlobalSoundBuffer.BytesPerSample = sizeof(int16_t) * 2;
+            GlobalSoundBuffer.SamplesPerSecond = 48000;
+            GlobalSoundBuffer.SecondaryBufferSize = GlobalSoundBuffer.SamplesPerSecond * GlobalSoundBuffer.BytesPerSample;
+            GlobalSoundBuffer.WavePeriod = GlobalSoundBuffer.SamplesPerSecond/GlobalSoundBuffer.SoundHz;
+            GlobalSoundBuffer.LatencySampleCount = GlobalSoundBuffer.SamplesPerSecond / 15;
 
-            PlatformSoundOutputParams SoundParams = {};
+            InitDirectSound(GlobalSoundBuffer.SecondaryBufferSize, GlobalSoundBuffer.SamplesPerSecond);
+            FillSoundBuffer(0, GlobalSoundBuffer.LatencySampleCount * GlobalSoundBuffer.BytesPerSample);
+            GlobalSoundBuffer.SecondaryBuffer->Play(0, 0, DSBPLAY_LOOPING);
 
-            SoundParams.SoundHz = 256;
-            SoundParams.Volume = 1000;
-            SoundParams.SampleIndex = 0;
-            SoundParams.BytesPerSample = sizeof(int16_t) * 2;
-            SoundParams.SamplesPerSecond = 48000;
-            SoundParams.SecondaryBufferSize = SoundParams.SamplesPerSecond * SoundParams.BytesPerSample;
-            SoundParams.WavePeriod = SoundParams.SamplesPerSecond/SoundParams.SoundHz;
-            SoundParams.LatencySampleCount = SoundParams.SamplesPerSecond / 15;
-
-            InitDirectSound(WindowHandle, SoundParams.SecondaryBufferSize, SoundParams.SamplesPerSecond);
-            FillSoundBuffer(&SoundParams, 0, SoundParams.LatencySampleCount * SoundParams.BytesPerSample);
-            GlobalSecondaryBuffer->Play(0, 0, DSBPLAY_LOOPING);
-
+            
+            // Initialize timing code.
             LARGE_INTEGER LastCounter = GetWallClock();
-
 			uint64_t LastCPUCycleCount = __rdtsc();
 
+            // Initial input retrieval.
             platform_player_input LastInput = {};
             platform_player_input CurrentInput = GetPlayerInput(0);
 
+
+            /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+             * Game loop:                                              *
+             *    1. Handle all Windows messages from queue            *
+             *    2. Clear the offscreen buffer                        *
+             *    3. Retrieve input from controller                    *
+             *    4. Call into game code with appropriate parameters   *
+             *    5. Flip the bitmap buffer to Windows                 *
+             *    6. Update timing monitors                            *
+             * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
             for (;;)
             {
+                // Loop to process all Windows messages. PeekMessage pulls
+                // messages off the hidden queue. The messages are translated
+                // and dispatched via standard Win32 calls. Note, however, that
+                // Windows reserves the right to call the window callback
+                // directly, skipping the message queue system entirely.
                 MSG Message;
                 while (PeekMessage(&Message, 0, 0, 0, PM_REMOVE))
                 {
@@ -396,34 +393,41 @@ int CALLBACK WinMain(HINSTANCE Instance,
                     {
                         return 0;
                     }
+
+                    // Per MSDN: Translates virtual-key messages into character messages.
+                    // If the msg is a virtual-key msg, it is translated and reposted to
+                    // the queue. The current msg, however, is NOT modified -- a new one
+                    // is created. 
                     TranslateMessage(&Message);
+
+                    // Sends the message to the defined window callback.
                     DispatchMessage(&Message);
                 }
-                // TODO: Include timedelta/mechanisms for enforcing limited frame rate
-                ClearOffscreenBuffer(platform_bitmap_buffer *Buffer);
+                
+                ClearOffscreenBuffer();
                 LastInput = CurrentInput;
                 CurrentInput = GetPlayerInput(0);
-                    UpdateGameState(&Controller1State, WinRect.right, WinRect.bottom);
-                    HDC WindowDC = GetDC(WindHandle);
-                    RenderGame(WindHandle, WindowDC);
-                    ReleaseDC(WindHandle, WindowDC);
+                UpdateGameAndRender(&GlobalBackbuffer, &GlobalSoundBuffer, &CurrentInput);
+                HDC WindowDC = GetDC(GameWindow.WindowHandle);
+                DrawToWindow(WindowDC);
+                ReleaseDC(GameWindow.WindowHandle, GameWindow.DeviceContext);
 
                 DWORD PlayCursor, WriteCursor;
-                if (SUCCEEDED(GlobalSecondaryBuffer->GetCurrentPosition(&PlayCursor, &WriteCursor)))
+                if (SUCCEEDED(GlobalSoundBuffer.SecondaryBuffer->GetCurrentPosition(&PlayCursor, &WriteCursor)))
                 {
                     DWORD NumBytes;
-                    DWORD TargetCursor = (PlayCursor + (SoundParams.LatencySampleCount * SoundParams.BytesPerSample)) % SoundParams.SecondaryBufferSize;
-                    DWORD SampleIndexToLock = (SoundParams.SampleIndex * SoundParams.BytesPerSample) % SoundParams.SecondaryBufferSize;
+                    DWORD TargetCursor = (PlayCursor + (GlobalSoundBuffer.LatencySampleCount * GlobalSoundBuffer.BytesPerSample)) % GlobalSoundBuffer.SecondaryBufferSize;
+                    DWORD SampleIndexToLock = (GlobalSoundBuffer.SampleIndex * GlobalSoundBuffer.BytesPerSample) % GlobalSoundBuffer.SecondaryBufferSize;
                     if (SampleIndexToLock > TargetCursor)
                     {
-                        NumBytes = SoundParams.SecondaryBufferSize - SampleIndexToLock;
+                        NumBytes = GlobalSoundBuffer.SecondaryBufferSize - SampleIndexToLock;
                         NumBytes += TargetCursor;
                     }
                     else
                     {
                         NumBytes = TargetCursor - SampleIndexToLock;
                     }
-                    FillSoundBuffer(&SoundParams, SampleIndexToLock, NumBytes);
+                    FillSoundBuffer(SampleIndexToLock, NumBytes);
                 }
 
 				uint64_t EndCPUCycleCount = __rdtsc();
