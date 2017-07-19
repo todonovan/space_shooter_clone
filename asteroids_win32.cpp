@@ -6,10 +6,9 @@
 #include <dsound.h>
 #include <stdexcept>
 
-#include "asteroids.cpp"
 #include "platform.h"
 
-struct InternalGameWindow
+struct internal_game_window
 {
     HWND WindowHandle;
     RECT ClientRect;
@@ -20,7 +19,7 @@ struct InternalGameWindow
 
 struct platform_bitmap_buffer
 {
-    BITMAPINFO InfoHeader;
+    BITMAPINFO InfoStruct;
     void *Memory;
     uint32_t Width;
     uint32_t Height;
@@ -30,7 +29,7 @@ struct platform_bitmap_buffer
 
 struct platform_player_input
 {
-    float Magnitude;
+    float NormalizedMagnitude;
     float NormalizedLX;
     float NormalizedLY;
     bool A_Pressed;
@@ -53,57 +52,97 @@ struct platform_sound_buffer
     int LatencySampleCount;
 };
 
+#include "asteroids.cpp"
+
 static int64_t PerfCountFrequency;
 
 static platform_sound_buffer GlobalSecondaryBuffer;
 static platform_bitmap_buffer GlobalBackbuffer;
+static internal_game_window GameWindow;
 
-void GetWindowDimension(InternalGameWindow *WinStruct)
+void UpdateWindowDimensions(HWND WindowHandle)
 {
-    GetClientRect(WinStruct->WindowHandow, &(WinStruct->ClientRect));
+    GameWindow.WindowHandle = WindowHandle;
+    GameWindow.ClientRect = {};
+    GetClientRect(GameWindow.WindowHandow, &(GameWindow.ClientRect));
+    GameWindow.Width = GameWindow.ClientRect.right - GameWindow.ClientRect.left;
+    GameWindow.Height = GameWindow.ClientRect.bottom - GameWindow.ClientRect.top; // Negative to ensure top-down DIB
 }
 
 void ResizeDIBSection(int Width, int Height)
 {
-
-    if (BitmapMemory)
+    if (GlobalBackbuffer.BitmapMemory)
     {
         VirtualFree(BitmapMemory, 0, MEM_RELEASE);
     }
 
-    BitmapWidth = Width;
-    BitmapHeight = Height;
+    GlobalBackbuffer.Width = Width;
+    GlobalBackbuffer.Height = Height;
 
-    BitmapInfo.bmiHeader.biSize = sizeof(BitmapInfo.bmiHeader);
-    BitmapInfo.bmiHeader.biWidth = BitmapWidth;
-    BitmapInfo.bmiHeader.biHeight = BitmapHeight;
-    BitmapInfo.bmiHeader.biPlanes = 1;
-    BitmapInfo.bmiHeader.biBitCount = 32;
-    BitmapInfo.bmiHeader.biCompression = BI_RGB;
+    GlobalBackbuffer.InfoStruct.bmiHeader.biSize = sizeof(GlobalBackbuffer.InfoStruct.bmiHeader);
+    GlobalBackbuffer.InfoStruct.bmiHeader.biWidth = BitmapWidth;
+    GlobalBackbuffer.InfoStruct.bmiHeader.biHeight = -BitmapHeight;
+    GlobalBackbuffer.InfoStruct.bmiHeader.biPlanes = 1;
+    GlobalBackbuffer.InfoStruct.bmiHeader.biBitCount = 32;
+    GlobalBackbuffer.InfoStruct.bmiHeader.biCompression = BI_RGB;
+    GlobalBackbuffer.BytesPerPixel = 4; // 4 bytes per pixel to keep dword aligned
+    GlobalBackbuffer.Pitch = Width * GlobalBackbuffer.BytesPerPixel;
+    int BitmapMemorySize = GlobalBackbuffer.BitmapWidth * GlobalBackbuffer.Height * GlobalBackbuffer.BytesPerPixel;
 
-    int BytesPerPixel = 4; // 4 bytes per pixel to keep dword aligned
-    int BitmapMemorySize = BitmapWidth * BitmapHeight * BytesPerPixel;
-    BitmapMemory = VirtualAlloc(0, BitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
+    GlobalBackbuffer.BitmapMemory = VirtualAlloc(0, BitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
 }
 
-void DrawToWindow(InternalGameWindow *WinStruct)HDC WindowDC, RECT *WindowRect, int Width, int Height)
+inline void ClearOffscreenBuffer()
 {
-    StretchDIBits(WinStruct->DeviceContext, 0, 0, WinStruct->Width, WinStruct->Height, 0, 0, WinStruct->Width,
-                  WinStruct->Height, GlobalBackbuffer->Memory, &(GlobalBackbuffer->BitmapInfo), DIB_RGB_COLORS, SRCCOPY);
+    if (!(GlobalBackbuffer->Memory)) return;
+	ZeroMemory(GlobalBackbuffer->BitmapMemory, GlobalBackbuffer->Height * GlobalBackbuffer->Width * 4);
 }
 
-platform_player_input GetControllerInput(DWORD ControllerNumber)
+void DrawToWindow()
+{
+    StretchDIBits(GameWindow.DeviceContext, 0, 0, GameWindow.Width, GameWindow.Height, 0, 0, GlobalBackbuffer.Width,
+                  GlobalBackbuffer.Height, GlobalBackbuffer->Memory, &(GlobalBackbuffer->BitmapInfo), DIB_RGB_COLORS, SRCCOPY);
+}
+
+platform_player_input GetPlayerInput(DWORD ControllerNumber)
 {
     XINPUT_STATE ControllerState;
     platform_player_input PlayerInput = {};
+
     if (XInputGetState(ControllerNumber, &ControllerState) == ERROR_SUCCESS)
     {
+        float LX = ControllerState.Gamepad.sThumbLX;
+        float LY = ControllerState.Gamepad.sThumbLY;
+        float magnitude = sqrt((LX * LX) + (LY * LY));
 
+        float normalizedMagnitude;
+        if (magnitude > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE)
+        {
+            if (magnitude > 32767)
+            {
+                magnitude = 32767;
+            }
+            magnitude -= XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE;
+            normalizedMagnitude = magnitude / (32767 - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+        }
+        else
+        {
+            magnitude = 0.0f;
+            normalizedMagnitude = 0.0f;
+        }
+
+        PlayerInput.NormalizedMagnitude = normalizedMagnitude;
+        PlayerInput.NormalizedLX = LX / magnitude;
+        PlayerInput.NormalizedLY = LY / magnitude;
+
+        PlayerInput.A_Pressed = (ControllerState.Gamepad.wButtons & XINPUT_GAMEPAD_A);
+        PlayerInput.B_Pressed = (ControllerState.Gamepad.wButtons & XINPUT_GAMEPAD_B);
+        PlayerInput.LTrigger_Pressed = (Controller->bLeftTrigger > 50);
+        PlayerInput.RTrigger_Pressed = (Controller->bRightTrigger > 50);
+        PlayerInput.Start_Pressed = (ControllerState.Gamepad.wButtons & XINPUT_GAMEPAD_START);
     }
-    else
-    {
-        throw std::runtime_error("Controller not connected");
-    }
+    
+    return PlayerInput;
 }
 
 void InitDirectSound(HWND Window, int BufferSize, int SamplesPerSecond)
@@ -158,16 +197,7 @@ rendered/blitted. WinMain must (eventually) implement the concept of a
 frame rate/time delta, in order to allow for appropriate updates, as
 well as to ensure we don't melt any CPUs. That delta will eventually
 be passed to GameTick(), as well as the required HWND for blitting purposes. */
-void GameTick(HWND WindHandle)
-{
-    RECT WinRect;
-    GetClientRect(WindHandle, &WinRect);
-    XINPUT_GAMEPAD Controller1State = GetControllerInput(0);
-    UpdateGameState(&Controller1State, WinRect.right, WinRect.bottom);
-    HDC WindowDC = GetDC(WindHandle);
-    RenderGame(WindHandle, WindowDC);
-    ReleaseDC(WindHandle, WindowDC);
-}
+
 
 void FillSoundBuffer(PlatformSoundOutputParams *SoundParams, DWORD ByteToLock, DWORD BytesToWrite)
 {
@@ -216,21 +246,14 @@ LRESULT CALLBACK AsteroidsWindowCallback(HWND WindHandle,
 
     switch (Message)
     {
-        // To do: handle all painting, resize, etc.
         case WM_SIZE:
         {
-            RECT ClientRect;
-            GetClientRect(WindHandle, &ClientRect);
-            int Width = ClientRect.right - ClientRect.left;
-            int Height = ClientRect.bottom - ClientRect.top; // Negative to ensure top-down DIB
-            ResizeDIBSection(Width, Height);
-            return 0;
+            UpdateWindowDimensions();
         }
         case WM_PAINT:
         {
 			PAINTSTRUCT PaintStruct;
-			RECT ClientRect;
-			GetClientRect(WindHandle, &ClientRect);
+			UpdateWindowDimensions(WindHandle);
 			HDC PaintDC = BeginPaint(WindHandle, &PaintStruct);
 			int X = PaintStruct.rcPaint.left;
 			int Y = PaintStruct.rcPaint.top;
@@ -291,10 +314,10 @@ int CALLBACK WinMain(HINSTANCE Instance,
                      int CommandShow)
 {
     WNDCLASS WindowClass = {}; // Ensure the struct is zeroed.
-    WindowClass.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
+    WindowClass.style = CS_HREDRAW | CS_VREDRAW;
     WindowClass.lpfnWndProc = &AsteroidsWindowCallback;
     WindowClass.hInstance = Instance;
-    WindowClass.lpszClassName = "AsteroidsWindow";
+    WindowClass.lpszClassName = "AsteroidsWindowClass";
 
     int MonitorRefreshRate = 60;
     int GameUpdateRate = 60;
@@ -309,16 +332,18 @@ int CALLBACK WinMain(HINSTANCE Instance,
     // RegisterClass returns an ATOM, which we likely will not need to store.
     if (RegisterClass(&WindowClass))
     {
-        HWND WindowHandle = CreateWindowEx(0, "AsteroidsWindow", "Asteroids", WS_OVERLAPPEDWINDOW|WS_VISIBLE,
+        HWND WindowHandle = CreateWindowEx(0, WindowClass.lpszClassName, "Space Shooter", WS_OVERLAPPEDWINDOW|WS_VISIBLE,
             CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, 0, 0, Instance, 0);
 
         if (WindowHandle)
         {
+            GameWindow = {};
+            GameWindow.WindowHandle = WindowHandle;
+            
+            ResizeDIBSection(1280, 720);
             Player = {};
             player_model Model = {};
             Model.LineWidth = 3.0f;
-            RECT WinRect;
-            GetClientRect(WindowHandle, &WinRect);
 
             vec_2 Midpoint = {};
             Midpoint.X = WinRect.right / 2;
@@ -359,6 +384,9 @@ int CALLBACK WinMain(HINSTANCE Instance,
 
 			uint64_t LastCPUCycleCount = __rdtsc();
 
+            platform_player_input LastInput = {};
+            platform_player_input CurrentInput = GetPlayerInput(0);
+
             for (;;)
             {
                 MSG Message;
@@ -372,7 +400,13 @@ int CALLBACK WinMain(HINSTANCE Instance,
                     DispatchMessage(&Message);
                 }
                 // TODO: Include timedelta/mechanisms for enforcing limited frame rate
-                GameTick(WindowHandle);
+                ClearOffscreenBuffer(platform_bitmap_buffer *Buffer);
+                LastInput = CurrentInput;
+                CurrentInput = GetPlayerInput(0);
+                    UpdateGameState(&Controller1State, WinRect.right, WinRect.bottom);
+                    HDC WindowDC = GetDC(WindHandle);
+                    RenderGame(WindHandle, WindowDC);
+                    ReleaseDC(WindHandle, WindowDC);
 
                 DWORD PlayCursor, WriteCursor;
                 if (SUCCEEDED(GlobalSecondaryBuffer->GetCurrentPosition(&PlayCursor, &WriteCursor)))

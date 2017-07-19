@@ -45,30 +45,27 @@ struct game_memory
 };
 
 static game_memory GameMemory;
+static player_object Player;
 
-inline void ClearOffscreenBuffer(platform_bitmap_buffer *OffscreenBuffer)
-{
-    if (!(OffscreenBuffer->Memory)) return;
-	ZeroMemory(OffscreenBuffer->BitmapMemory, OffscreenBuffer->Height * OffscreenBuffer->Width * 4);
-}
-
-void SetPixelInBuffer(platform_bitmap_buffer *Buffer, vec_2 *Coords, color_triple *Colors, float Brightness, int WindowWidth, int WindowHeight)
+// Note that this may not be portable, as it relies upon the way Windows structures
+// bitmap data in memory.
+void SetPixelInBuffer(platform_bitmap_buffer *Buffer, vec_2 *Coords, color_triple *Colors, float Brightness)
 {
     if (!(Buffer->Memory)) return;
-    int X = (Coords->X < 0) ? ((int)Coords->X + WindowWidth) : ((int)Coords->X % WindowWidth);
-    int Y = (Coords->Y < 0) ? ((int)Coords->Y + WindowHeight) : ((int)Coords->Y % WindowHeight);
+    int X = (Coords->X < 0) ? ((int)Coords->X + Buffer->Width) : ((int)Coords->X % Buffer->Width);
+    int Y = (Coords->Y < 0) ? ((int)Coords->Y + Buffer->Height) : ((int)Coords->Y % Buffer->Height);
 
-    uint8_t *Pixel = (uint8_t *)((char *)(Buffer->Memory) + (Y * Buffer->Width * 4) + (X * 4));
+    uint32_t *Pixel = (uint32_t *)((char *)(Buffer->Memory) + (Y * Buffer->Width * 4) + (X * 4));
 
-    *Pixel = (uint8_t)((Colors->Blue) * Brightness);
-    Pixel++;
-    *Pixel = (uint8_t)((Colors->Green) * Brightness);
-    Pixel++;
-    *Pixel = (uint8_t)((Colors->Red) * Brightness);
+    uint8_t Blue  = (Colors->Blue * Brightness);
+    uint8_t Red   = (Colors->Red * Brightness);
+    uint8_t Green = (Colors->Green * Brightness);
+
+    *Pixel = ((Red << 16) | (Green << 8) | Blue);
 }
 
 /// TODO!! Restore the actual width capabilities (e.g., reducing brightness incrementally further away pixel is from center of line)
-void DrawLineWidth(platform_bitmap_buffer *Buffer, vec_2 *Point1, vec_2 *Point2, color_triple *Color, int WindowWidth, int WindowHeight)
+void DrawLineWidth(platform_bitmap_buffer *Buffer, vec_2 *Point1, vec_2 *Point2, color_triple *Color)
 {
     int x0 = Point1->X;
     int x1 = Point2->X;
@@ -88,7 +85,7 @@ void DrawLineWidth(platform_bitmap_buffer *Buffer, vec_2 *Point1, vec_2 *Point2,
         Coords.Y = y0;
         // To restore the anti-aliasing, this proc would have to take a param
         // that represented the amount to scale down the 'brightness' of the pixel.
-        SetPixelInBuffer(Buffer, &Coords, Color, max(0,100*(abs(err-dx+dy)/ed-wd+1)), WindowWidth, WindowHeight);
+        SetPixelInBuffer(Buffer, &Coords, Color, max(0,100*(abs(err-dx+dy)/ed-wd+1)));
         e2 = err; x2 = x0;
         if (2*e2 >= -dx)
         {
@@ -98,7 +95,7 @@ void DrawLineWidth(platform_bitmap_buffer *Buffer, vec_2 *Point1, vec_2 *Point2,
                 Coords2.X = x0;
                 Coords2.Y = y2 += sy;
 
-                SetPixelInBuffer(Buffer, &Coords2, Color, max(0,100*(abs(err-dx+dy)/ed-wd+1)), WindowWidth, WindowHeight);
+                SetPixelInBuffer(Buffer, &Coords2, Color, max(0,100*(abs(err-dx+dy)/ed-wd+1)));
             }
             if (x0 == x1) break;
             e2 = err; err -= dy; x0 += sx;
@@ -110,7 +107,7 @@ void DrawLineWidth(platform_bitmap_buffer *Buffer, vec_2 *Point1, vec_2 *Point2,
                 vec_2 Coords2;
                 Coords2.X = x2 += sx;
                 Coords2.Y = y0;
-                SetPixelInBuffer(Buffer, &Coords2, Color, max(0,100*(abs(err-dx+dy)/ed-wd+1)), WindowWidth, WindowHeight);
+                SetPixelInBuffer(Buffer, &Coords2, Color, max(0,100*(abs(err-dx+dy)/ed-wd+1)));
             }
             if (y0 == y1) break;
             err += dx; y0 += sy;
@@ -130,23 +127,23 @@ player_model SetPlayerModelForDraw(player_object *Player)
     }
 }
 
-inline void HandlePlayerEdgeWarping(int WindowWidth, int WindowHeight)
+inline void HandlePlayerEdgeWarping(int Width, int Height)
 {
     if (Player.Midpoint.X < 0)
     {
-        Player.Midpoint.X += WindowWidth;
+        Player.Midpoint.X += Width;
     }
-    else if (Player.Midpoint.X >= WindowWidth)
+    else if (Player.Midpoint.X >= Width)
     {
-        Player.Midpoint.X -= WindowWidth;
+        Player.Midpoint.X -= Width;
     }
     if (Player.Midpoint.Y < 0)
     {
-        Player.Midpoint.Y += WindowHeight;
+        Player.Midpoint.Y += Height;
     }
-    else if (Player.Midpoint.Y >= WindowHeight)
+    else if (Player.Midpoint.Y >= Height)
     {
-        Player.Midpoint.Y -= WindowHeight;
+        Player.Midpoint.Y -= Height;
     }
 }
 
@@ -159,20 +156,20 @@ inline void HandlePlayerEdgeWarping(int WindowWidth, int WindowHeight)
 // of offset and recomputing rotation each frame still the appropriate method?
 // Maybe just do both. Store the angle of offset (for things like laser spawning) and
 // simply recompute the draw vertices each time from the start vertices.
-void DrawPlayerModelInBuffer(int WindowWidth, int WindowHeight)
+void DrawPlayerModelInBuffer(platform_bitmap_buffer *Buffer)
 {
-    if (!BitmapMemory) return;
+    if (!(Buffer->BitmapMemory)) return;
 
     int cur = 0, next = 1;
     vec_2 Cur, Next;
 
     for (int i = 0; i < 3; ++i)
     {
-        Cur.X = Player.Model->Vertices[cur].X + Player.Midpoint.X;
-        Cur.Y = Player.Model->Vertices[cur].Y + Player.Midpoint.Y;
-        Next.X = Player.Model->Vertices[next].X + Player.Midpoint.X;
-        Next.Y = Player.Model->Vertices[next].Y + Player.Midpoint.Y;
-        DrawLineWidth(&Cur, &Next, &(Player.Model->Color), WindowWidth, WindowHeight);
+        Cur.X = Player.Model->DrawVertices[cur].X + Player.Midpoint.X;
+        Cur.Y = Player.Model->DrawVertices[cur].Y + Player.Midpoint.Y;
+        Next.X = Player.Model->DrawVertices[next].X + Player.Midpoint.X;
+        Next.Y = Player.Model->DrawVertices[next].Y + Player.Midpoint.Y;
+        DrawLineWidth(Buffer, &Cur, &Next, &(Player.Model->Color));
         ++cur;
         if (i < 2) ++next;
     }
@@ -180,7 +177,7 @@ void DrawPlayerModelInBuffer(int WindowWidth, int WindowHeight)
     Cur.Y = Player.Model->Vertices[cur].Y + Player.Midpoint.Y;
     Next.X = Player.Model->Vertices[0].X + Player.Midpoint.X;
     Next.Y = Player.Model->Vertices[0].Y + Player.Midpoint.Y;
-    DrawLineWidth(&Cur, &Next, &(Player.Model->Color), WindowWidth, WindowHeight);
+    DrawLineWidth(Buffer, &Cur, &Next, &(Player.Model->Color));
 }
 
 void RenderGame(HWND WindHandle, HDC WindowDC)
@@ -192,37 +189,8 @@ void RenderGame(HWND WindHandle, HDC WindowDC)
     DrawToWindow(WindowDC, &ClientRect, Width, Height);
 }
 
-void UpdateGameState(XINPUT_GAMEPAD *Controller, long WindowWidth, long WindowHeight)
+void UpdateGameAndRender(platform_bitmap_buffer *OffscreenBuffer, platform_sound_buffer *SoundBuffer, platform_player_input *PlayerInput)
 {
-    PlayerControlInput PlayerInput;
-    float LX = Controller->sThumbLX;
-    float LY = Controller->sThumbLY;
-    float magnitude = sqrt(LX*LX + LY*LY);
-
-    PlayerInput.NormalizedLX = LX / magnitude;
-    PlayerInput.NormalizedLY = LY / magnitude;
-
-    float normalizedMagnitude = 0;
-
-    if (magnitude > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE)
-    {
-        if (magnitude > 32767) magnitude = 32767;
-        magnitude -= XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE;
-        normalizedMagnitude = magnitude / (32767 - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
-    }
-    else
-    {
-        magnitude = 0.0;
-        normalizedMagnitude = 0.0;
-    }
-    PlayerInput.Magnitude = normalizedMagnitude;
-
-    PlayerInput.A_Pressed = (Controller->wButtons & XINPUT_GAMEPAD_A);
-    PlayerInput.B_Pressed = (Controller->wButtons & XINPUT_GAMEPAD_B);
-    PlayerInput.LTrigger_Pressed = Controller->bLeftTrigger > 50;
-    PlayerInput.RTrigger_Pressed = Controller->bRightTrigger > 50;
-    PlayerInput.Start_Pressed = (Controller->wButtons & XINPUT_GAMEPAD_START);
-
     if (PlayerInput.Start_Pressed)
     {
         PostQuitMessage(0);
@@ -246,7 +214,7 @@ void UpdateGameState(XINPUT_GAMEPAD *Controller, long WindowWidth, long WindowHe
     Player->Midpoint.X += Player->X_Momentum;
     Player->Midpoint.Y += Player->Y_Momentum;
 
-    HandlePlayerEdgeWarping(WindowWidth, WindowHeight);
+    HandlePlayerEdgeWarping(OffscreenBuffer->Width, OffscreenBuffer->Height);
     SetPlayerModelForDraw(Player);
     DrawPlayerModelInBuffer();
 }
