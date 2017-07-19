@@ -34,8 +34,8 @@ struct platform_player_input
     float NormalizedLY;
     bool A_Pressed;
     bool B_Pressed;
-    bool LTrigger_Pressed;
-    bool RTrigger_Pressed;
+    float LTrigger;
+    float RTrigger;
     bool Start_Pressed;
 };
 
@@ -81,7 +81,7 @@ void ResizeDIBSection(int Width, int Height)
 
     GlobalBackbuffer.InfoStruct.bmiHeader.biSize = sizeof(GlobalBackbuffer.InfoStruct.bmiHeader);
     GlobalBackbuffer.InfoStruct.bmiHeader.biWidth = GlobalBackbuffer.Width;
-    GlobalBackbuffer.InfoStruct.bmiHeader.biHeight = -GlobalBackbuffer.Height; // Negative to ensure top-down DIB
+    GlobalBackbuffer.InfoStruct.bmiHeader.biHeight = GlobalBackbuffer.Height; // Negative to ensure top-down DIB
     GlobalBackbuffer.InfoStruct.bmiHeader.biPlanes = 1;
     GlobalBackbuffer.InfoStruct.bmiHeader.biBitCount = 32;
     GlobalBackbuffer.InfoStruct.bmiHeader.biCompression = BI_RGB;
@@ -135,10 +135,33 @@ platform_player_input GetPlayerInput(DWORD ControllerNumber)
 
         PlayerInput.Magnitude = normalizedMagnitude;
 
+		uint8_t leftTrig = (ControllerState.Gamepad.bLeftTrigger > 50) ? ControllerState.Gamepad.bLeftTrigger : 0;
+		uint8_t rightTrig = (ControllerState.Gamepad.bRightTrigger > 50) ? ControllerState.Gamepad.bRightTrigger : 0;
+
+		float normalizedLeftTrig, normalizedRightTrig;
+
+		if (leftTrig > 0)
+		{
+			normalizedLeftTrig = ((float)leftTrig - 50.0f) / (255.0f - 50.0f);
+		}
+		else
+		{
+			normalizedLeftTrig = 0.0f;
+		}
+
+		if (rightTrig > 0)
+		{
+			normalizedRightTrig = -1.0f * (((float)rightTrig - 50.0f) / (255.0f - 50.0f));
+		}
+		else
+		{
+			normalizedRightTrig = 0.0f;
+		}
+
         PlayerInput.A_Pressed = (ControllerState.Gamepad.wButtons & XINPUT_GAMEPAD_A);
         PlayerInput.B_Pressed = (ControllerState.Gamepad.wButtons & XINPUT_GAMEPAD_B);
-        PlayerInput.LTrigger_Pressed = (ControllerState.Gamepad.bLeftTrigger > 50);
-        PlayerInput.RTrigger_Pressed = (ControllerState.Gamepad.bRightTrigger > 50);
+		PlayerInput.LTrigger = normalizedLeftTrig * 1.25;
+		PlayerInput.RTrigger = normalizedRightTrig * 1.25;
         PlayerInput.Start_Pressed = (ControllerState.Gamepad.wButtons & XINPUT_GAMEPAD_START);
     }
 
@@ -234,10 +257,6 @@ LRESULT CALLBACK AsteroidsWindowCallback(HWND WindHandle,
 
     switch (Message)
     {
-        case WM_SIZE:
-        {
-            UpdateWindowDimensions(WindHandle);
-        }
         case WM_PAINT:
         {
 			PAINTSTRUCT PaintStruct;
@@ -247,7 +266,6 @@ LRESULT CALLBACK AsteroidsWindowCallback(HWND WindHandle,
 			int Y = PaintStruct.rcPaint.top;
 			int Width = PaintStruct.rcPaint.right - PaintStruct.rcPaint.left;
 			int Height = PaintStruct.rcPaint.bottom - PaintStruct.rcPaint.top;
-
 			DrawToWindow(PaintDC);
 			EndPaint(WindHandle, &PaintStruct);
 			return 0;
@@ -302,7 +320,7 @@ int CALLBACK WinMain(HINSTANCE Instance,
                      int CommandShow)
 {
     WNDCLASS WindowClass = {};
-    WindowClass.style = CS_HREDRAW | CS_VREDRAW;
+    WindowClass.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
     WindowClass.lpfnWndProc = &AsteroidsWindowCallback;
     WindowClass.hInstance = Instance;
     WindowClass.lpszClassName = "AsteroidsWindowClass";
@@ -328,7 +346,9 @@ int CALLBACK WinMain(HINSTANCE Instance,
             // Initialize window and bitmap buffer.
             GameWindow = {};
             GameWindow.WindowHandle = WindowHandle;
-            ResizeDIBSection(1280, 720);
+			GameWindow.ClientRect = {};
+			UpdateWindowDimensions(WindowHandle);
+            ResizeDIBSection(1980, 1020);
 
 
             // Initialize DirectSound (secondary) buffer.
@@ -395,9 +415,9 @@ int CALLBACK WinMain(HINSTANCE Instance,
                 LastInput = CurrentInput;
                 CurrentInput = GetPlayerInput(0);
                 UpdateGameAndRender(&GlobalBackbuffer, &GlobalSoundBuffer, &CurrentInput);
-                HDC WindowDC = GetDC(GameWindow.WindowHandle);
+                HDC WindowDC = GetDC(WindowHandle);
                 DrawToWindow(WindowDC);
-                ReleaseDC(GameWindow.WindowHandle, WindowDC);
+                ReleaseDC(WindowHandle, WindowDC);
 
                 DWORD PlayCursor, WriteCursor;
                 if (SUCCEEDED(GlobalSoundBuffer.SecondaryBuffer->GetCurrentPosition(&PlayCursor, &WriteCursor)))

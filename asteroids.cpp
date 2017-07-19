@@ -48,7 +48,6 @@ struct game_memory
 static game_memory GameMemory;
 static player_object Player;
 static player_model Model;
-static bool GameMemoryInitialized = false;
 
 // Note that this may not be portable, as it relies upon the way Windows structures
 // bitmap data in memory.
@@ -60,11 +59,11 @@ void SetPixelInBuffer(platform_bitmap_buffer *Buffer, vec_2 *Coords, color_tripl
 
     uint8_t *Pixel = (uint8_t *)((char *)(Buffer->Memory) + (Y * Buffer->Width * 4) + (X * 4));
 
-    *Pixel = (Colors->Blue * Brightness);
+    *Pixel = (Colors->Blue);
     Pixel++;
-    *Pixel = (Colors->Green * Brightness);
+    *Pixel = (Colors->Green);
     Pixel++;
-    *Pixel = (Colors->Red * Brightness);
+    *Pixel = (Colors->Red);
 }
 
 /// TODO!! Restore the actual width capabilities (e.g., reducing brightness incrementally further away pixel is from center of line)
@@ -185,13 +184,14 @@ void DrawPlayerModelInBuffer(platform_bitmap_buffer *Buffer)
 
 void UpdateGameAndRender(platform_bitmap_buffer *OffscreenBuffer, platform_sound_buffer *SoundBuffer, platform_player_input *PlayerInput)
 {
+    static bool GameMemoryInitialized = false;
     if (!GameMemoryInitialized)
     {
         // Initialize game memory here!
         Player = {};
         Model = {};
         Player.Model = &Model;
-        Player.Model.LineWidth = 3.0f;
+        Player.Model->LineWidth = 2.0f;
 
         Player.Midpoint.X = OffscreenBuffer->Width / 2;
         Player.Midpoint.Y = OffscreenBuffer->Height / 10;
@@ -200,10 +200,10 @@ void UpdateGameAndRender(platform_bitmap_buffer *OffscreenBuffer, platform_sound
         PlayerTop.X = 0.0f, PlayerTop.Y = 40.0f;
         PlayerRight.X = 20.0f, PlayerRight.Y = -20.0f;
         PlayerBottom.X = 0.0f, PlayerBottom.Y = 0.0f;
-        Player->Model.StartVertices[0] = PlayerLeft, Player->Model.StartVertices[1] = Player->PlayerTop, Player->Model.StartVertices[2] = PlayerRight, Player->Model.StartVertices[3] = PlayerBottom;
-		Player->Model.DrawVertices[0] = PlayerLeft, Player->Model.DrawVertices[1] = Player->PlayerTop, Player->Model.DrawVertices[2] = PlayerRight, Player->Model.DrawVertices[3] = PlayerBottom;
+        Player.Model->StartVertices[0] = PlayerLeft, Player.Model->StartVertices[1] = PlayerTop, Player.Model->StartVertices[2] = PlayerRight, Player.Model->StartVertices[3] = PlayerBottom;
+		Player.Model->DrawVertices[0] = PlayerLeft, Player.Model->DrawVertices[1] = PlayerTop, Player.Model->DrawVertices[2] = PlayerRight, Player.Model->DrawVertices[3] = PlayerBottom;
 
-		Player->Model.Color.Red = 100, Player->Model.Color.Blue = 100, Player->Model.Color.Green = 100;
+		Player.Model->Color.Red = 100, Player.Model->Color.Blue = 100, Player.Model->Color.Green = 100;
 
         // This value currently is fixed and does not change
         Player.AngularMomentum = 0.1f;
@@ -218,14 +218,8 @@ void UpdateGameAndRender(platform_bitmap_buffer *OffscreenBuffer, platform_sound
     {
         Player.Model->Color.Red = 0, Player.Model->Color.Blue = 200;
     }
-    if (PlayerInput->LTrigger_Pressed)
-    {
-        Player.OffsetAngle += Player.AngularMomentum;
-    }
-    if (PlayerInput->RTrigger_Pressed)
-    {
-        Player.OffsetAngle -= Player.AngularMomentum;
-    }
+    
+    Player.OffsetAngle += Player.AngularMomentum * (PlayerInput->LTrigger + PlayerInput->RTrigger);
 
     Player.X_Momentum += (PlayerInput->NormalizedLX * PlayerInput->Magnitude) * .5f;
     Player.Y_Momentum += (PlayerInput->NormalizedLY * PlayerInput->Magnitude) * .5f;
@@ -236,4 +230,7 @@ void UpdateGameAndRender(platform_bitmap_buffer *OffscreenBuffer, platform_sound
     HandlePlayerEdgeWarping(OffscreenBuffer->Width, OffscreenBuffer->Height);
     SetPlayerModelForDraw();
     DrawPlayerModelInBuffer(OffscreenBuffer);
+    char Buffer[256];
+    sprintf(Buffer, "%.02f Player X, %.02f Player Y\n", Player.Midpoint.X, Player.Midpoint.Y);
+    OutputDebugStringA(Buffer);
 }
