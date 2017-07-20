@@ -98,10 +98,10 @@ struct game_memory
 // used to be.
 
 static game_memory GameMemory;
-static player_object Player;
-static player_model P_Model;
-static asteroid_object Asteroid;
-static asteroid_model A_Model;
+static game_object Player;
+static object_model P_Model;
+static game_object Asteroid;
+static object_model A_Model;
 
 
 // Note that this may not be portable, as it relies upon the way Windows structures
@@ -173,27 +173,15 @@ void DrawLineWidth(platform_bitmap_buffer *Buffer, vec_2 *Point1, vec_2 *Point2,
     }
 }
 
-void SetModelForDraw(game_object *Object)
+void SetObjectModelForDraw(game_object *Object)
 {
     float Theta = Object->OffsetAngle;
-    for (int i = 0; i < Object->NumVertices; ++i)
+    for (int i = 0; i < Object->Model.NumVertices; ++i)
     {
-        float X_Orig = Object->Model->StartVertices[i].X;
-        float Y_Orig = Object->Model->StartVertices[i].Y;
-        Object->Model->DrawVertices[i].X = (X_Orig * cos(Theta)) - (Y_Orig * sin(Theta));
-        Object->Model->DrawVertices[i].Y = (X_Orig * sin(Theta)) + (Y_Orig * cos(Theta));
-    }
-}
-
-void SetAsteroidModelForDraw()
-{
-    float Theta = Asteroid.OffsetAngle;
-    for (int i = 0; i < 6; ++i)
-    {
-        float X_Orig = Asteroid.Model->StartVertices[i].X;
-        float Y_Orig = Asteroid.Model->StartVertices[i].Y;
-        Asteroid.Model->DrawVertices[i].X = (X_Orig * cos(Theta)) - (Y_Orig * sin(Theta));
-        Asteroid.Model->DrawVertices[i].Y = (X_Orig * sin(Theta)) + (Y_Orig * cos(Theta));
+        float X_Orig = Object->Model.StartVertices[i].X;
+        float Y_Orig = Object->Model.StartVertices[i].Y;
+        Object->Model.DrawVertices[i].X = (X_Orig * cos(Theta)) - (Y_Orig * sin(Theta));
+        Object->Model.DrawVertices[i].Y = (X_Orig * sin(Theta)) + (Y_Orig * cos(Theta));
     }
 }
 
@@ -214,26 +202,6 @@ inline void HandleObjectEdgeWarping(game_object *Object, int Width, int Height)
     else if (Object->Midpoint.Y >= Height)
     {
         Object->Midpoint.Y -= Height;
-    }
-}
-
-inline void HandleAsteroidEdgeWarping(int Width, int Height)
-{
-    if (Asteroid.Midpoint.X < 0)
-    {
-        Asteroid.Midpoint.X += Width;
-    }
-    else if (Asteroid.Midpoint.X >= Width)
-    {
-        Asteroid.Midpoint.X -= Width;
-    }
-    if (Asteroid.Midpoint.Y < 0)
-    {
-        Asteroid.Midpoint.Y += Height;
-    }
-    else if (Asteroid.Midpoint.Y >= Height)
-    {
-        Asteroid.Midpoint.Y -= Height;
     }
 }
 
@@ -261,30 +229,6 @@ void DrawObjectModelInBuffer(platform_bitmap_buffer *Buffer, game_object *Object
     DrawLineWidth(Buffer, &Cur, &Next, &(Object->Model.Color), Object->Model.LineWidth);
 }
 
-void DrawAsteroidModelInBuffer(platform_bitmap_buffer *Buffer)
-{
-    if (!(Buffer->Memory)) return;
-
-    int cur = 0, next = 1;
-    vec_2 Cur, Next;
-
-    for (int i = 0; i < 5; ++i)
-    {
-        Cur.X = Asteroid.Model->DrawVertices[cur].X + Asteroid.Midpoint.X;
-        Cur.Y = Asteroid.Model->DrawVertices[cur].Y + Asteroid.Midpoint.Y;
-        Next.X = Asteroid.Model->DrawVertices[next].X + Asteroid.Midpoint.X;
-        Next.Y = Asteroid.Model->DrawVertices[next].Y + Asteroid.Midpoint.Y;
-        DrawLineWidth(Buffer, &Cur, &Next, &(Asteroid.Model->Color), Asteroid.Model->LineWidth);
-        ++cur;
-        if (i < 4) ++next;
-    }
-    Cur.X = Asteroid.Model->DrawVertices[cur].X + Asteroid.Midpoint.X;
-    Cur.Y = Asteroid.Model->DrawVertices[cur].Y + Asteroid.Midpoint.Y;
-    Next.X = Asteroid.Model->DrawVertices[0].X + Asteroid.Midpoint.X;
-    Next.Y = Asteroid.Model->DrawVertices[0].Y + Asteroid.Midpoint.Y;
-    DrawLineWidth(Buffer, &Cur, &Next, &(Asteroid.Model->Color), Asteroid.Model->LineWidth);
-}
-
 void UpdateGameAndRender(platform_bitmap_buffer *OffscreenBuffer, platform_sound_buffer *SoundBuffer, platform_player_input *PlayerInput)
 {
     static bool GameMemoryInitialized = false;
@@ -293,8 +237,8 @@ void UpdateGameAndRender(platform_bitmap_buffer *OffscreenBuffer, platform_sound
         // Initialize game memory here!
         Player = {};
         P_Model = {};
-        Player.Model = &P_Model;
-        Player.Model->LineWidth = 1.5f;
+        Player.Model = P_Model;
+        Player.Model.LineWidth = 1.5f;
 
         Player.Midpoint.X = OffscreenBuffer->Width / 2;
         Player.Midpoint.Y = OffscreenBuffer->Height / 10;
@@ -303,16 +247,16 @@ void UpdateGameAndRender(platform_bitmap_buffer *OffscreenBuffer, platform_sound
         PlayerTop.X = 0.0f, PlayerTop.Y = 40.0f;
         PlayerRight.X = 20.0f, PlayerRight.Y = -20.0f;
         PlayerBottom.X = 0.0f, PlayerBottom.Y = 0.0f;
-        Player.Model->StartVertices[0] = PlayerLeft, Player.Model->StartVertices[1] = PlayerTop, Player.Model->StartVertices[2] = PlayerRight, Player.Model->StartVertices[3] = PlayerBottom;
-		Player.Model->DrawVertices[0] = PlayerLeft, Player.Model->DrawVertices[1] = PlayerTop, Player.Model->DrawVertices[2] = PlayerRight, Player.Model->DrawVertices[3] = PlayerBottom;
+        Player.Model.StartVertices[0] = PlayerLeft, Player.Model.StartVertices[1] = PlayerTop, Player.Model.StartVertices[2] = PlayerRight, Player.Model.StartVertices[3] = PlayerBottom;
+		Player.Model.DrawVertices[0] = PlayerLeft, Player.Model.DrawVertices[1] = PlayerTop, Player.Model.DrawVertices[2] = PlayerRight, Player.Model.DrawVertices[3] = PlayerBottom;
 
-		Player.Model->Color.Red = 100, Player.Model->Color.Blue = 100, Player.Model->Color.Green = 100;
+		Player.Model.Color.Red = 100, Player.Model.Color.Blue = 100, Player.Model.Color.Green = 100;
         Player.AngularMomentum = 0.1f;
 
         Asteroid = {};
         A_Model = {};
-        Asteroid.Model = &A_Model;
-        Asteroid.Model->LineWidth = 1.0f;
+        Asteroid.Model = A_Model;
+        Asteroid.Model.LineWidth = 1.0f;
 
         Asteroid.Midpoint.X = OffscreenBuffer->Width / 10;
         Asteroid.Midpoint.Y = (OffscreenBuffer->Height / 10) * 7;
@@ -324,14 +268,14 @@ void UpdateGameAndRender(platform_bitmap_buffer *OffscreenBuffer, platform_sound
         AstBotRight.X = 20.0f, AstBotRight.Y = -35.0f;
         AstBotLeft.X = -60.0f, AstBotLeft.Y = -70.0f;
 
-        Asteroid.Model->StartVertices[0] = Asteroid.Model->DrawVertices[0] = AstLeft;
-        Asteroid.Model->StartVertices[1] = Asteroid.Model->DrawVertices[1] = AstTopLeft;
-        Asteroid.Model->StartVertices[2] = Asteroid.Model->DrawVertices[2] = AstTopRight;
-        Asteroid.Model->StartVertices[3] = Asteroid.Model->DrawVertices[3] = AstRight;
-        Asteroid.Model->StartVertices[4] = Asteroid.Model->DrawVertices[4] = AstBotRight;
-        Asteroid.Model->StartVertices[5] = Asteroid.Model->DrawVertices[5] = AstBotLeft;
+        Asteroid.Model.StartVertices[0] = Asteroid.Model.DrawVertices[0] = AstLeft;
+        Asteroid.Model.StartVertices[1] = Asteroid.Model.DrawVertices[1] = AstTopLeft;
+        Asteroid.Model.StartVertices[2] = Asteroid.Model.DrawVertices[2] = AstTopRight;
+        Asteroid.Model.StartVertices[3] = Asteroid.Model.DrawVertices[3] = AstRight;
+        Asteroid.Model.StartVertices[4] = Asteroid.Model.DrawVertices[4] = AstBotRight;
+        Asteroid.Model.StartVertices[5] = Asteroid.Model.DrawVertices[5] = AstBotLeft;
 
-        Asteroid.Model->Color.Red = 220, Asteroid.Model->Color.Blue = 220, Asteroid.Model->Color.Green = 200;
+        Asteroid.Model.Color.Red = 220, Asteroid.Model.Color.Blue = 220, Asteroid.Model.Color.Green = 200;
         Asteroid.X_Momentum = -0.25f, Asteroid.Y_Momentum = -1.0f;
         Asteroid.AngularMomentum = 0.005f;
 
@@ -344,7 +288,7 @@ void UpdateGameAndRender(platform_bitmap_buffer *OffscreenBuffer, platform_sound
     }
     if (PlayerInput->B_Pressed)
     {
-        Player.Model->Color.Red = 0, Player.Model->Color.Blue = 200;
+        Player.Model.Color.Red = 0, Player.Model.Color.Blue = 200;
     }
 
     Player.OffsetAngle += Player.AngularMomentum * (PlayerInput->LTrigger + PlayerInput->RTrigger);
@@ -359,10 +303,10 @@ void UpdateGameAndRender(platform_bitmap_buffer *OffscreenBuffer, platform_sound
     Asteroid.Midpoint.X += Asteroid.X_Momentum;
     Asteroid.Midpoint.Y += Asteroid.Y_Momentum;
 
-    HandlePlayerEdgeWarping(OffscreenBuffer->Width, OffscreenBuffer->Height);
-    HandleAsteroidEdgeWarping(OffscreenBuffer->Width, OffscreenBuffer->Height);
-    SetPlayerModelForDraw();
-    SetAsteroidModelForDraw();
-    DrawAsteroidModelInBuffer(OffscreenBuffer);
-    DrawPlayerModelInBuffer(OffscreenBuffer);
+    HandleObjectEdgeWarping(&Asteroid, OffscreenBuffer->Width, OffscreenBuffer->Height);
+    HandleObjectEdgeWarping(&Player, OffscreenBuffer->Width, OffscreenBuffer->Height);
+    SetObjectModelForDraw(&Asteroid);
+    SetObjectModelForDraw(&Player);
+    DrawObjectModelInBuffer(OffscreenBuffer, &Asteroid);
+    DrawObjectModelInBuffer(OffscreenBuffer, &Player);
 }
