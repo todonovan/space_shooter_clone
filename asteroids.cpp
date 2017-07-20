@@ -54,14 +54,48 @@ struct asteroid_object
     float AngularMomentum;
 };
 
+typedef enum {
+    PLAYER,
+    ASTEROID_LARGE,
+    ASTEROID_MEDIUM,
+    ASTEROID_SMALL
+} object_type;
+
+struct object_model
+{
+    int NumVertices;
+    vec_2 *StartVertices;
+    vec_2 *DrawVertices;
+    color_triple Color;
+    float LineWidth;
+};
+
+struct game_object
+{
+    object_type Type;
+    object_model Model;
+    vec_2 Midpoint;
+    float X_Momentum;
+    float Y_Momentum;
+    float OffsetAngle;
+    float AngularMomentum;
+};
+
 struct game_memory
 {
-    uint32_t PersistStorageSize;
-    void *PersistStorage;
-    uint32_t TransientStorageSize;
-    void *TransientStorage;
-    bool Initialized;
+    game_object Player;
+    uint32_t NumAsteroids;
+    game_object *Asteroids;
 };
+
+// Thoughts for allocating into this game memory...
+// Need to allocate a chunk of space for the asteroids somehow (even just VirtualAlloc), and assign the resulting pointer to Memory.Asteroids
+// Then, to create an asteroid, build a new asteroid within a function, then do a memcpy(), where the location is equal
+// to GameMemory.Asteroids + NumAsteroids, the length is sizeof(game_object), etc.
+// To iterate through the asteroids, use the NumAsteroids/pointer arithmetic again.
+// When despawning an asteroid, have to consolidate the memory. Simply do a memcpy() from the last asteroid to where the
+// asteroid was despawned, then decrement the NumAsteroids so the next asteroid to be added will get added to where the last one
+// used to be.
 
 static game_memory GameMemory;
 static player_object Player;
@@ -139,15 +173,15 @@ void DrawLineWidth(platform_bitmap_buffer *Buffer, vec_2 *Point1, vec_2 *Point2,
     }
 }
 
-void SetPlayerModelForDraw()
+void SetModelForDraw(game_object *Object)
 {
-    float Theta = Player.OffsetAngle;
-    for (int i = 0; i < 4; ++i)
+    float Theta = Object->OffsetAngle;
+    for (int i = 0; i < Object->NumVertices; ++i)
     {
-        float X_Orig = Player.Model->StartVertices[i].X;
-        float Y_Orig = Player.Model->StartVertices[i].Y;
-        Player.Model->DrawVertices[i].X = (X_Orig * cos(Theta)) - (Y_Orig * sin(Theta));
-        Player.Model->DrawVertices[i].Y = (X_Orig * sin(Theta)) + (Y_Orig * cos(Theta));
+        float X_Orig = Object->Model->StartVertices[i].X;
+        float Y_Orig = Object->Model->StartVertices[i].Y;
+        Object->Model->DrawVertices[i].X = (X_Orig * cos(Theta)) - (Y_Orig * sin(Theta));
+        Object->Model->DrawVertices[i].Y = (X_Orig * sin(Theta)) + (Y_Orig * cos(Theta));
     }
 }
 
@@ -163,23 +197,23 @@ void SetAsteroidModelForDraw()
     }
 }
 
-inline void HandlePlayerEdgeWarping(int Width, int Height)
+inline void HandleObjectEdgeWarping(game_object *Object, int Width, int Height)
 {
-    if (Player.Midpoint.X < 0)
+    if (Object->Midpoint.X < 0)
     {
-        Player.Midpoint.X += Width;
+        Object->Midpoint.X += Width;
     }
-    else if (Player.Midpoint.X >= Width)
+    else if (Object->Midpoint.X >= Width)
     {
-        Player.Midpoint.X -= Width;
+        Object->Midpoint.X -= Width;
     }
-    if (Player.Midpoint.Y < 0)
+    if (Object->Midpoint.Y < 0)
     {
-        Player.Midpoint.Y += Height;
+        Object->Midpoint.Y += Height;
     }
-    else if (Player.Midpoint.Y >= Height)
+    else if (Object->Midpoint.Y >= Height)
     {
-        Player.Midpoint.Y -= Height;
+        Object->Midpoint.Y -= Height;
     }
 }
 
@@ -203,37 +237,28 @@ inline void HandleAsteroidEdgeWarping(int Width, int Height)
     }
 }
 
-// To consider -- remove the hacky DrawVertices[] from model, simply handle
-// the rotation here prior to draw.
-// Consider -- will we want the true location of the player's vertices stored
-// for things like collision detection? May want to keep even though DrawVertices[]
-// seems like a strange solution.
-// Rebuttal -- if we need the actual vertices, post-rota, stored, is storing the angle
-// of offset and recomputing rotation each frame still the appropriate method?
-// Maybe just do both. Store the angle of offset (for things like laser spawning) and
-// simply recompute the draw vertices each time from the start vertices.
-void DrawPlayerModelInBuffer(platform_bitmap_buffer *Buffer)
+void DrawObjectModelInBuffer(platform_bitmap_buffer *Buffer, game_object *Object)
 {
     if (!(Buffer->Memory)) return;
 
     int cur = 0, next = 1;
     vec_2 Cur, Next;
 
-    for (int i = 0; i < 3; ++i)
+    for (int i = 0; i < Object->Model.NumVertices - 1; ++i)
     {
-        Cur.X = Player.Model->DrawVertices[cur].X + Player.Midpoint.X;
-        Cur.Y = Player.Model->DrawVertices[cur].Y + Player.Midpoint.Y;
-        Next.X = Player.Model->DrawVertices[next].X + Player.Midpoint.X;
-        Next.Y = Player.Model->DrawVertices[next].Y + Player.Midpoint.Y;
-        DrawLineWidth(Buffer, &Cur, &Next, &(Player.Model->Color), Player.Model->LineWidth);
+        Cur.X = Object->Model.DrawVertices[cur].X + Object->Midpoint.X;
+        Cur.Y = Object->Model.DrawVertices[cur].Y + Object->Midpoint.Y;
+        Next.X = Object->Model.DrawVertices[next].X + Object->Midpoint.X;
+        Next.Y = Object->Model.DrawVertices[next].Y + Object->Midpoint.Y;
+        DrawLineWidth(Buffer, &Cur, &Next, &(Object->Model.Color), Object->Model.LineWidth);
         ++cur;
         if (i < 2) ++next;
     }
-    Cur.X = Player.Model->DrawVertices[cur].X + Player.Midpoint.X;
-    Cur.Y = Player.Model->DrawVertices[cur].Y + Player.Midpoint.Y;
-    Next.X = Player.Model->DrawVertices[0].X + Player.Midpoint.X;
-    Next.Y = Player.Model->DrawVertices[0].Y + Player.Midpoint.Y;
-    DrawLineWidth(Buffer, &Cur, &Next, &(Player.Model->Color), Player.Model->LineWidth);
+    Cur.X = Object->Model.DrawVertices[cur].X + Object->Midpoint.X;
+    Cur.Y = Object->Model.DrawVertices[cur].Y + Object->Midpoint.Y;
+    Next.X = Object->Model.DrawVertices[0].X + Object->Midpoint.X;
+    Next.Y = Object->Model.DrawVertices[0].Y + Object->Midpoint.Y;
+    DrawLineWidth(Buffer, &Cur, &Next, &(Object->Model.Color), Object->Model.LineWidth);
 }
 
 void DrawAsteroidModelInBuffer(platform_bitmap_buffer *Buffer)
@@ -321,7 +346,7 @@ void UpdateGameAndRender(platform_bitmap_buffer *OffscreenBuffer, platform_sound
     {
         Player.Model->Color.Red = 0, Player.Model->Color.Blue = 200;
     }
-    
+
     Player.OffsetAngle += Player.AngularMomentum * (PlayerInput->LTrigger + PlayerInput->RTrigger);
     Asteroid.OffsetAngle += Asteroid.AngularMomentum;
 
