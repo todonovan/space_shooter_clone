@@ -36,6 +36,24 @@ struct player_object
     float AngularMomentum;
 };
 
+struct asteroid_model
+{
+    vec_2 StartVertices[6];
+    vec_2 DrawVertices[6];
+    color_triple Color;
+    float LineWidth;
+};
+
+struct asteroid_object
+{
+    asteroid_model *Model;
+    vec_2 Midpoint;
+    float X_Momentum;
+    float Y_Momentum;
+    float OffsetAngle;
+    float AngularMomentum;
+};
+
 struct game_memory
 {
     uint32_t PersistStorageSize;
@@ -47,7 +65,10 @@ struct game_memory
 
 static game_memory GameMemory;
 static player_object Player;
-static player_model Model;
+static player_model P_Model;
+static asteroid_object Asteroid;
+static asteroid_model A_Model;
+
 
 // Note that this may not be portable, as it relies upon the way Windows structures
 // bitmap data in memory.
@@ -66,7 +87,8 @@ void SetPixelInBuffer(platform_bitmap_buffer *Buffer, vec_2 *Coords, color_tripl
     *Pixel = (Colors->Red);
 }
 
-/// TODO!! Restore the actual width capabilities (e.g., reducing brightness incrementally further away pixel is from center of line)
+/// TODO!! This implementation of Bresenham, courtesy of the internet, is busted. Must find better line-drawing
+/// alg that handles width properly. All Bresenham implementations seem to be poorly suited to width handling.
 void DrawLineWidth(platform_bitmap_buffer *Buffer, vec_2 *Point1, vec_2 *Point2, color_triple *Color, float LineWidth)
 {
     int x0 = Point1->X;
@@ -129,6 +151,18 @@ void SetPlayerModelForDraw()
     }
 }
 
+void SetAsteroidModelForDraw()
+{
+    float Theta = Asteroid.OffsetAngle;
+    for (int i = 0; i < 6; ++i)
+    {
+        float X_Orig = Asteroid.Model->StartVertices[i].X;
+        float Y_Orig = Asteroid.Model->StartVertices[i].Y;
+        Asteroid.Model->DrawVertices[i].X = (X_Orig * cos(Theta)) - (Y_Orig * sin(Theta));
+        Asteroid.Model->DrawVertices[i].Y = (X_Orig * sin(Theta)) + (Y_Orig * cos(Theta));
+    }
+}
+
 inline void HandlePlayerEdgeWarping(int Width, int Height)
 {
     if (Player.Midpoint.X < 0)
@@ -146,6 +180,26 @@ inline void HandlePlayerEdgeWarping(int Width, int Height)
     else if (Player.Midpoint.Y >= Height)
     {
         Player.Midpoint.Y -= Height;
+    }
+}
+
+inline void HandleAsteroidEdgeWarping(int Width, int Height)
+{
+    if (Asteroid.Midpoint.X < 0)
+    {
+        Asteroid.Midpoint.X += Width;
+    }
+    else if (Asteroid.Midpoint.X >= Width)
+    {
+        Asteroid.Midpoint.X -= Width;
+    }
+    if (Asteroid.Midpoint.Y < 0)
+    {
+        Asteroid.Midpoint.Y += Height;
+    }
+    else if (Asteroid.Midpoint.Y >= Height)
+    {
+        Asteroid.Midpoint.Y -= Height;
     }
 }
 
@@ -182,6 +236,30 @@ void DrawPlayerModelInBuffer(platform_bitmap_buffer *Buffer)
     DrawLineWidth(Buffer, &Cur, &Next, &(Player.Model->Color), Player.Model->LineWidth);
 }
 
+void DrawAsteroidModelInBuffer(platform_bitmap_buffer *Buffer)
+{
+    if (!(Buffer->Memory)) return;
+
+    int cur = 0, next = 1;
+    vec_2 Cur, Next;
+
+    for (int i = 0; i < 5; ++i)
+    {
+        Cur.X = Asteroid.Model->DrawVertices[cur].X + Asteroid.Midpoint.X;
+        Cur.Y = Asteroid.Model->DrawVertices[cur].Y + Asteroid.Midpoint.Y;
+        Next.X = Asteroid.Model->DrawVertices[next].X + Asteroid.Midpoint.X;
+        Next.Y = Asteroid.Model->DrawVertices[next].Y + Asteroid.Midpoint.Y;
+        DrawLineWidth(Buffer, &Cur, &Next, &(Asteroid.Model->Color), Asteroid.Model->LineWidth);
+        ++cur;
+        if (i < 4) ++next;
+    }
+    Cur.X = Asteroid.Model->DrawVertices[cur].X + Asteroid.Midpoint.X;
+    Cur.Y = Asteroid.Model->DrawVertices[cur].Y + Asteroid.Midpoint.Y;
+    Next.X = Asteroid.Model->DrawVertices[0].X + Asteroid.Midpoint.X;
+    Next.Y = Asteroid.Model->DrawVertices[0].Y + Asteroid.Midpoint.Y;
+    DrawLineWidth(Buffer, &Cur, &Next, &(Asteroid.Model->Color), Asteroid.Model->LineWidth);
+}
+
 void UpdateGameAndRender(platform_bitmap_buffer *OffscreenBuffer, platform_sound_buffer *SoundBuffer, platform_player_input *PlayerInput)
 {
     static bool GameMemoryInitialized = false;
@@ -189,9 +267,9 @@ void UpdateGameAndRender(platform_bitmap_buffer *OffscreenBuffer, platform_sound
     {
         // Initialize game memory here!
         Player = {};
-        Model = {};
-        Player.Model = &Model;
-        Player.Model->LineWidth = 2.0f;
+        P_Model = {};
+        Player.Model = &P_Model;
+        Player.Model->LineWidth = 1.5f;
 
         Player.Midpoint.X = OffscreenBuffer->Width / 2;
         Player.Midpoint.Y = OffscreenBuffer->Height / 10;
@@ -204,9 +282,34 @@ void UpdateGameAndRender(platform_bitmap_buffer *OffscreenBuffer, platform_sound
 		Player.Model->DrawVertices[0] = PlayerLeft, Player.Model->DrawVertices[1] = PlayerTop, Player.Model->DrawVertices[2] = PlayerRight, Player.Model->DrawVertices[3] = PlayerBottom;
 
 		Player.Model->Color.Red = 100, Player.Model->Color.Blue = 100, Player.Model->Color.Green = 100;
-
-        // This value currently is fixed and does not change
         Player.AngularMomentum = 0.1f;
+
+        Asteroid = {};
+        A_Model = {};
+        Asteroid.Model = &A_Model;
+        Asteroid.Model->LineWidth = 1.0f;
+
+        Asteroid.Midpoint.X = OffscreenBuffer->Width / 10;
+        Asteroid.Midpoint.Y = (OffscreenBuffer->Height / 10) * 7;
+        vec_2 AstLeft, AstTopLeft, AstTopRight, AstRight, AstBotRight, AstBotLeft;
+        AstLeft.X = -80.0f, AstLeft.Y = 0.0f;
+        AstTopLeft.X = -25.0f, AstTopLeft.Y = 100.0f;
+        AstTopRight.X = 30.0f, AstTopRight.Y = 85.0f;
+        AstRight.X = 45.0f, AstRight.Y = 2.0f;
+        AstBotRight.X = 20.0f, AstBotRight.Y = -35.0f;
+        AstBotLeft.X = -60.0f, AstBotLeft.Y = -70.0f;
+
+        Asteroid.Model->StartVertices[0] = Asteroid.Model->DrawVertices[0] = AstLeft;
+        Asteroid.Model->StartVertices[1] = Asteroid.Model->DrawVertices[1] = AstTopLeft;
+        Asteroid.Model->StartVertices[2] = Asteroid.Model->DrawVertices[2] = AstTopRight;
+        Asteroid.Model->StartVertices[3] = Asteroid.Model->DrawVertices[3] = AstRight;
+        Asteroid.Model->StartVertices[4] = Asteroid.Model->DrawVertices[4] = AstBotRight;
+        Asteroid.Model->StartVertices[5] = Asteroid.Model->DrawVertices[5] = AstBotLeft;
+
+        Asteroid.Model->Color.Red = 220, Asteroid.Model->Color.Blue = 220, Asteroid.Model->Color.Green = 200;
+        Asteroid.X_Momentum = -0.25f, Asteroid.Y_Momentum = -1.0f;
+        Asteroid.AngularMomentum = 0.005f;
+
 		GameMemoryInitialized = true;
     }
 
@@ -220,6 +323,7 @@ void UpdateGameAndRender(platform_bitmap_buffer *OffscreenBuffer, platform_sound
     }
     
     Player.OffsetAngle += Player.AngularMomentum * (PlayerInput->LTrigger + PlayerInput->RTrigger);
+    Asteroid.OffsetAngle += Asteroid.AngularMomentum;
 
     Player.X_Momentum += (PlayerInput->NormalizedLX * PlayerInput->Magnitude) * .5f;
     Player.Y_Momentum += (PlayerInput->NormalizedLY * PlayerInput->Magnitude) * .5f;
@@ -227,10 +331,13 @@ void UpdateGameAndRender(platform_bitmap_buffer *OffscreenBuffer, platform_sound
     Player.Midpoint.X += Player.X_Momentum;
     Player.Midpoint.Y += Player.Y_Momentum;
 
+    Asteroid.Midpoint.X += Asteroid.X_Momentum;
+    Asteroid.Midpoint.Y += Asteroid.Y_Momentum;
+
     HandlePlayerEdgeWarping(OffscreenBuffer->Width, OffscreenBuffer->Height);
+    HandleAsteroidEdgeWarping(OffscreenBuffer->Width, OffscreenBuffer->Height);
     SetPlayerModelForDraw();
+    SetAsteroidModelForDraw();
+    DrawAsteroidModelInBuffer(OffscreenBuffer);
     DrawPlayerModelInBuffer(OffscreenBuffer);
-    char Buffer[256];
-    sprintf(Buffer, "%.02f Player X, %.02f Player Y\n", Player.Midpoint.X, Player.Midpoint.Y);
-    OutputDebugStringA(Buffer);
 }
