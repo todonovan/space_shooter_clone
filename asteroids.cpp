@@ -18,43 +18,7 @@ struct color_triple
     uint8_t Green;
 };
 
-struct player_model
-{
-    vec_2 StartVertices[4];
-    vec_2 DrawVertices[4];
-    color_triple Color;
-    float LineWidth;
-};
-
-struct player_object
-{
-    player_model *Model;
-    vec_2 Midpoint;
-    float X_Momentum;
-    float Y_Momentum;
-    float OffsetAngle;
-    float AngularMomentum;
-};
-
-struct asteroid_model
-{
-    vec_2 StartVertices[6];
-    vec_2 DrawVertices[6];
-    color_triple Color;
-    float LineWidth;
-};
-
-struct asteroid_object
-{
-    asteroid_model *Model;
-    vec_2 Midpoint;
-    float X_Momentum;
-    float Y_Momentum;
-    float OffsetAngle;
-    float AngularMomentum;
-};
-
-typedef enum {
+typedef enum object_type {
     PLAYER,
     ASTEROID_LARGE,
     ASTEROID_MEDIUM,
@@ -79,13 +43,6 @@ struct game_object
     float Y_Momentum;
     float OffsetAngle;
     float AngularMomentum;
-};
-
-struct game_memory
-{
-    game_object Player;
-    uint32_t NumAsteroids;
-    game_object *Asteroids;
 };
 
 // Thoughts for allocating into this game memory...
@@ -229,14 +186,14 @@ void DrawObjectModelInBuffer(platform_bitmap_buffer *Buffer, game_object *Object
     DrawLineWidth(Buffer, &Cur, &Next, &(Object->Model.Color), Object->Model.LineWidth);
 }
 
-void UpdateGameAndRender(platform_bitmap_buffer *OffscreenBuffer, platform_sound_buffer *SoundBuffer, platform_player_input *PlayerInput)
+void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenBuffer, platform_sound_buffer *SoundBuffer, platform_player_input *PlayerInput)
 {
-    static bool GameMemoryInitialized = false;
-    if (!GameMemoryInitialized)
+    if (!Memory->IsInitialized)
     {
         // Initialize game memory here!
         Player = {};
         P_Model = {};
+        Player.Type = PLAYER;
         Player.Model = P_Model;
         Player.Model.LineWidth = 1.5f;
 
@@ -255,6 +212,7 @@ void UpdateGameAndRender(platform_bitmap_buffer *OffscreenBuffer, platform_sound
 
         Asteroid = {};
         A_Model = {};
+        Asteroid.Type = ASTEROID_LARGE;
         Asteroid.Model = A_Model;
         Asteroid.Model.LineWidth = 1.0f;
 
@@ -279,7 +237,7 @@ void UpdateGameAndRender(platform_bitmap_buffer *OffscreenBuffer, platform_sound
         Asteroid.X_Momentum = -0.25f, Asteroid.Y_Momentum = -1.0f;
         Asteroid.AngularMomentum = 0.005f;
 
-		GameMemoryInitialized = true;
+        Memory->IsInitialized = true;
     }
 
     if (PlayerInput->Start_Pressed)

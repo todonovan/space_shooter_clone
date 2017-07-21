@@ -17,41 +17,6 @@ struct internal_game_window
     uint16_t Height;
 };
 
-struct platform_bitmap_buffer
-{
-    BITMAPINFO InfoStruct;
-    void *Memory;
-    uint32_t Width;
-    uint32_t Height;
-    uint32_t Pitch;
-    uint32_t BytesPerPixel;
-};
-
-struct platform_player_input
-{
-    float Magnitude;
-    float NormalizedLX;
-    float NormalizedLY;
-    bool A_Pressed;
-    bool B_Pressed;
-    float LTrigger;
-    float RTrigger;
-    bool Start_Pressed;
-};
-
-struct platform_sound_buffer
-{
-    LPDIRECTSOUNDBUFFER SecondaryBuffer;
-    int SamplesPerSecond;
-    int SoundHz;
-    int16_t Volume;
-    uint32_t SampleIndex;
-    int WavePeriod;
-    int BytesPerSample;
-    int SecondaryBufferSize;
-    int LatencySampleCount;
-};
-
 #include "asteroids.cpp"
 
 static int64_t PerfCountFrequency;
@@ -89,7 +54,7 @@ void ResizeDIBSection(int Width, int Height)
     GlobalBackbuffer.Pitch = Width * GlobalBackbuffer.BytesPerPixel;
     int BitmapMemorySize = GlobalBackbuffer.Width * GlobalBackbuffer.Height * GlobalBackbuffer.BytesPerPixel;
 
-    GlobalBackbuffer.Memory = VirtualAlloc(0, BitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
+    GlobalBackbuffer.Memory = VirtualAlloc(0, BitmapMemorySize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
 }
 
 inline void ClearOffscreenBuffer()
@@ -367,6 +332,14 @@ int CALLBACK WinMain(HINSTANCE Instance,
             FillSoundBuffer(0, GlobalSoundBuffer.LatencySampleCount * GlobalSoundBuffer.BytesPerSample);
             GlobalSoundBuffer.SecondaryBuffer->Play(0, 0, DSBPLAY_LOOPING);
 
+            // Allocate game memory.
+
+            game_memory GameMemory = {};
+            GameMemory.PermanentStorageSize = Megabytes(16);
+            GameMemory.PermanentStorage = VirtualAlloc(0, GameMemory.PermanentStorageSize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+            GameMemory.TransientStorageSize = Megabytes(64);
+            GameMemory.TransientStorage = VirtualAlloc(0, GameMemory.TransientStorageSize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+
 
             // Initialize timing code.
             LARGE_INTEGER LastCounter = GetWallClock();
@@ -414,7 +387,7 @@ int CALLBACK WinMain(HINSTANCE Instance,
                 ClearOffscreenBuffer();
                 LastInput = CurrentInput;
                 CurrentInput = GetPlayerInput(0);
-                UpdateGameAndRender(&GlobalBackbuffer, &GlobalSoundBuffer, &CurrentInput);
+                UpdateGameAndRender(&GameMemory, &GlobalBackbuffer, &GlobalSoundBuffer, &CurrentInput);
                 HDC WindowDC = GetDC(WindowHandle);
                 DrawToWindow(WindowDC);
                 ReleaseDC(WindowHandle, WindowDC);
