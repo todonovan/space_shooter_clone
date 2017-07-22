@@ -45,6 +45,11 @@ struct game_object
     float AngularMomentum;
 };
 
+static game_state
+{
+    game_object *Player;
+};
+
 // Thoughts for allocating into this game memory...
 // Need to allocate a chunk of space for the asteroids somehow (even just VirtualAlloc), and assign the resulting pointer to Memory.Asteroids
 // Then, to create an asteroid, build a new asteroid within a function, then do a memcpy(), where the location is equal
@@ -54,7 +59,7 @@ struct game_object
 // asteroid was despawned, then decrement the NumAsteroids so the next asteroid to be added will get added to where the last one
 // used to be.
 
-static game_memory GameMemory;
+static game_state GameState;
 static game_object Player;
 static object_model P_Model;
 static game_object Asteroid;
