@@ -103,6 +103,8 @@ void DrawLineWidth(platform_bitmap_buffer *Buffer, vec_2 *Point1, vec_2 *Point2,
         vec_2 Coords;
         Coords.X = x0;
         Coords.Y = y0;
+        // To restore the anti-aliasing, this proc would have to take a param
+        // that represented the amount to scale down the 'brightness' of the pixel.
         SetPixelInBuffer(Buffer, &Coords, Color, max(0,100*(abs(err-dx+dy)/ed-wd+1)));
         e2 = err; x2 = x0;
         if (2*e2 >= -dx)
@@ -193,7 +195,7 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
 {
     if (!Memory->IsInitialized)
     {
-        // Set up game memory here!
+        // Initialize game memory here!
         Player = {};
         P_Model = {};
         Player.Type = PLAYER;

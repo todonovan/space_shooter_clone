@@ -45,9 +45,15 @@ struct game_object
     float AngularMomentum;
 };
 
+<<<<<<< HEAD
 static game_state
 {
     game_object *Player;
+=======
+struct game_state
+{
+    game_object PlayerObject;
+>>>>>>> 4bfe358a7bdd0a37a1fd45841fe602a163a65bb8
 };
 
 // Thoughts for allocating into this game memory...

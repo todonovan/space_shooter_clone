@@ -45,9 +45,9 @@ struct game_object
     float AngularMomentum;
 };
 
-static game_state
+struct game_state
 {
-    game_object *Player;
+    game_object PlayerObject;
 };
 
 // Thoughts for allocating into this game memory...
@@ -59,7 +59,7 @@ static game_state
 // asteroid was despawned, then decrement the NumAsteroids so the next asteroid to be added will get added to where the last one
 // used to be.
 
-static game_state GameState;
+static game_memory GameMemory;
 static game_object Player;
 static object_model P_Model;
 static game_object Asteroid;
