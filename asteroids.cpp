@@ -18,6 +18,13 @@ struct color_triple
     uint8_t Green;
 };
 
+struct memory_segment
+{
+    uint32_t Size;
+    uint8_t *Storage;
+    uint32_t Used;
+};
+
 typedef enum object_type {
     PLAYER,
     ASTEROID_LARGE,
@@ -28,10 +35,20 @@ typedef enum object_type {
 struct object_model
 {
     int NumVertices;
-    vec_2 *StartVertices;
-    vec_2 *DrawVertices;
     color_triple Color;
     float LineWidth;
+};
+
+struct player_model : object_model
+{
+    vec_2 StartVertices[4];
+    vec_2 DrawVertices[4];
+};
+
+struct non_player_model : object_model
+{
+    vec_2 *StartVertices;
+    vec_2 *DrawVertices;
 };
 
 struct game_object
@@ -45,9 +62,20 @@ struct game_object
     float AngularMomentum;
 };
 
-static game_state
+struct player_object : game_object
 {
-    game_object *Player;
+
+};
+
+struct non_player_object : game_object
+{
+
+};
+
+struct game_state
+{
+    memory_segment SceneMemorySegment;
+    player_object *Player;
 };
 
 // Thoughts for allocating into this game memory...
@@ -58,13 +86,6 @@ static game_state
 // When despawning an asteroid, have to consolidate the memory. Simply do a memcpy() from the last asteroid to where the
 // asteroid was despawned, then decrement the NumAsteroids so the next asteroid to be added will get added to where the last one
 // used to be.
-
-static game_state GameState;
-static game_object Player;
-static object_model P_Model;
-static game_object Asteroid;
-static object_model A_Model;
-
 
 // Note that this may not be portable, as it relies upon the way Windows structures
 // bitmap data in memory.
@@ -136,12 +157,27 @@ void DrawLineWidth(platform_bitmap_buffer *Buffer, vec_2 *Point1, vec_2 *Point2,
 void SetObjectModelForDraw(game_object *Object)
 {
     float Theta = Object->OffsetAngle;
-    for (int i = 0; i < Object->Model.NumVertices; ++i)
+    if (Object->Type == object_type::PLAYER)
     {
-        float X_Orig = Object->Model.StartVertices[i].X;
-        float Y_Orig = Object->Model.StartVertices[i].Y;
-        Object->Model.DrawVertices[i].X = (X_Orig * cos(Theta)) - (Y_Orig * sin(Theta));
-        Object->Model.DrawVertices[i].Y = (X_Orig * sin(Theta)) + (Y_Orig * cos(Theta));
+        player_model PlayerModel = (player_model)Object->Model;
+        for (int i = 0; i < PlayerModel.NumVertices; ++i)
+        {
+            float X_Orig = PlayerModel.StartVertices[i].X;
+            float Y_Orig = PlayerModel.StartVertices[i].Y;
+            PlayerModel.DrawVertices[i].X = (X_Orig * cos(Theta)) - (Y_Orig * sin(Theta));
+            PlayerModel.DrawVertices[i].Y = (X_Orig * sin(Theta)) + (Y_Orig * cos(Theta));
+        }
+    }
+    else
+    {
+        non_player_model NP_Model = (non_player_model)Object->Model;
+        for (int i = 0; i < NP_Model.NumVertices; ++i)
+        {
+            float X_Orig = NP_Model.StartVertices[i].X;
+            float Y_Orig = NP_Model.StartVertices[i].Y;
+            NP_Model.DrawVertices[i].X = (X_Orig * cos(Theta)) - (Y_Orig * sin(Theta));
+            NP_Model.DrawVertices[i].Y = (X_Orig * sin(Theta)) + (Y_Orig * cos(Theta));
+        }
     }
 }
 
@@ -189,13 +225,34 @@ void DrawObjectModelInBuffer(platform_bitmap_buffer *Buffer, game_object *Object
     DrawLineWidth(Buffer, &Cur, &Next, &(Object->Model.Color), Object->Model.LineWidth);
 }
 
+void BeginMemorySegment(memory_segment *Segment, uint32_t Size, uint8_t *Storage)
+{
+    Segment->Size = Size;
+    Segment->Base = Storage;
+    Segment->Used = 0;
+}
+
+#define AssignToMemorySegment(Segment, type) (type *)AssignToMemorySegment_(Segment, sizeof(type))
+void * AssignToMemorySegment_(memory_segment *Segment, uint32_t Size)
+{
+    void *Result = Segment->Base + Segment->Used;
+    Segment->Used += size;
+    return Result;
+}
+
 void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenBuffer, platform_sound_buffer *SoundBuffer, platform_player_input *PlayerInput)
 {
+    game_state *GameState = (game_state *)Memory->PermanentStorage;
     if (!Memory->IsInitialized)
     {
         // Set up game memory here!
-        Player = {};
-        P_Model = {};
+
+        BeginMemorySegment(&GameState->SceneMemorySegment, (Memory->PermanentStorageSize - sizeof(game_state)),
+                        (uint8_t *)&Memory->PermanentStorage + sizeof(game_state));
+
+        
+        player_object Player = {};
+        player_model P_Model = {};
         Player.Type = PLAYER;
         Player.Model = P_Model;
         Player.Model.LineWidth = 1.5f;
@@ -213,7 +270,9 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
 		Player.Model.Color.Red = 100, Player.Model.Color.Blue = 100, Player.Model.Color.Green = 100;
         Player.AngularMomentum = 0.1f;
 
-        Asteroid = {};
+        GameState->Player = Player;
+
+        /*Asteroid = {};
         A_Model = {};
         Asteroid.Type = ASTEROID_LARGE;
         Asteroid.Model = A_Model;
@@ -238,7 +297,7 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
 
         Asteroid.Model.Color.Red = 220, Asteroid.Model.Color.Blue = 220, Asteroid.Model.Color.Green = 200;
         Asteroid.X_Momentum = -0.25f, Asteroid.Y_Momentum = -1.0f;
-        Asteroid.AngularMomentum = 0.005f;
+        Asteroid.AngularMomentum = 0.005f;*/
 
         Memory->IsInitialized = true;
     }
@@ -249,25 +308,25 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
     }
     if (PlayerInput->B_Pressed)
     {
-        Player.Model.Color.Red = 0, Player.Model.Color.Blue = 200;
+        GameState->Player.Model.Color.Red = 0, GameState->Player.Model.Color.Blue = 200;
     }
 
-    Player.OffsetAngle += Player.AngularMomentum * (PlayerInput->LTrigger + PlayerInput->RTrigger);
-    Asteroid.OffsetAngle += Asteroid.AngularMomentum;
+    GameState->Player.OffsetAngle += GameState->Player.AngularMomentum * (PlayerInput->LTrigger + PlayerInput->RTrigger);
+    //Asteroid.OffsetAngle += Asteroid.AngularMomentum;
 
-    Player.X_Momentum += (PlayerInput->NormalizedLX * PlayerInput->Magnitude) * .5f;
-    Player.Y_Momentum += (PlayerInput->NormalizedLY * PlayerInput->Magnitude) * .5f;
+    GameState->Player.X_Momentum += (PlayerInput->NormalizedLX * PlayerInput->Magnitude) * .5f;
+    GameState->Player.Y_Momentum += (PlayerInput->NormalizedLY * PlayerInput->Magnitude) * .5f;
 
-    Player.Midpoint.X += Player.X_Momentum;
-    Player.Midpoint.Y += Player.Y_Momentum;
+    GameState->Player.Midpoint.X += GameState->Player.X_Momentum;
+    GameState->Player.Midpoint.Y += GameState->Player.Y_Momentum;
 
-    Asteroid.Midpoint.X += Asteroid.X_Momentum;
-    Asteroid.Midpoint.Y += Asteroid.Y_Momentum;
+    //Asteroid.Midpoint.X += Asteroid.X_Momentum;
+    //Asteroid.Midpoint.Y += Asteroid.Y_Momentum;
 
-    HandleObjectEdgeWarping(&Asteroid, OffscreenBuffer->Width, OffscreenBuffer->Height);
-    HandleObjectEdgeWarping(&Player, OffscreenBuffer->Width, OffscreenBuffer->Height);
-    SetObjectModelForDraw(&Asteroid);
-    SetObjectModelForDraw(&Player);
-    DrawObjectModelInBuffer(OffscreenBuffer, &Asteroid);
-    DrawObjectModelInBuffer(OffscreenBuffer, &Player);
+    //HandleObjectEdgeWarping(&Asteroid, OffscreenBuffer->Width, OffscreenBuffer->Height);
+    HandleObjectEdgeWarping(&GameState->Player, OffscreenBuffer->Width, OffscreenBuffer->Height);
+    //SetObjectModelForDraw(&Asteroid);
+    SetObjectModelForDraw(&GameState->Player);
+    //DrawObjectModelInBuffer(OffscreenBuffer, &Asteroid);
+    DrawObjectModelInBuffer(OffscreenBuffer, &GameState->Player);
 }
