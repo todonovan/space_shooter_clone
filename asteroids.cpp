@@ -85,17 +85,15 @@ void SetObjectModelForDraw(game_object *Object)
 {
     object_model *Model = Object->Model;
     float Theta = Object->OffsetAngle;
-    vec_2 **StartVerts = Model->StartVertices;
-    vec_2 **DrawVerts = Model->DrawVertices;
+    vec_2 *StartVerts = Model->StartVerts->Verts;
+    vec_2 *DrawVerts = Model->DrawVerts->Verts;
 
     for (int i = 0; i < Model->NumVertices; ++i)
     {
-        vec_2 *S_V = StartVerts[i];
-        vec_2 *D_V = DrawVerts[i];
-        float X_Orig = S_V->X;
-        float Y_Orig = S_V->Y;
-        D_V->X = (X_Orig * cos(Theta)) - (Y_Orig * sin(Theta));
-        D_V->Y = (X_Orig * sin(Theta)) + (Y_Orig * cos(Theta));
+        float X_Orig = StartVerts[i].X;
+        float Y_Orig = StartVerts[i].Y;
+        DrawVerts[i].X = (X_Orig * cos(Theta)) - (Y_Orig * sin(Theta));
+        DrawVerts[i].Y = (X_Orig * sin(Theta)) + (Y_Orig * cos(Theta));
     }
 }
 
@@ -127,23 +125,23 @@ void DrawObjectModelInBuffer(platform_bitmap_buffer *Buffer, game_object *Object
     int cur = 0, next = 1;
     vec_2 Cur, Next;
     object_model *Model = Object->Model;
-    vec_2 **DrawVerts = Model->DrawVertices;
-    vec_2 **StartVerts = Model->StartVertices;
+    vert_set *DrawVerts = Model->DrawVerts;
+    vert_set *StartVerts = Model->StartVerts;
 
     for (int i = 0; i < Model->NumVertices - 1; ++i)
     {
-        Cur.X = DrawVerts[cur]->X + Object->Midpoint.X;
-        Cur.Y = DrawVerts[cur]->Y + Object->Midpoint.Y;
-        Next.X = DrawVerts[next]->X + Object->Midpoint.X;
-        Next.Y = DrawVerts[next]->Y + Object->Midpoint.Y;
+        Cur.X = DrawVerts->Verts[cur].X + Object->Midpoint.X;
+        Cur.Y = DrawVerts->Verts[cur].Y + Object->Midpoint.Y;
+        Next.X = DrawVerts->Verts[next].X + Object->Midpoint.X;
+        Next.Y = DrawVerts->Verts[next].Y + Object->Midpoint.Y;
         DrawLineWidth(Buffer, &Cur, &Next, &Model->Color, Model->LineWidth);
         ++cur;
         if (i < Model->NumVertices - 2) ++next;
     }
-    Cur.X = DrawVerts[cur]->X + Object->Midpoint.X;
-    Cur.Y = DrawVerts[cur]->Y + Object->Midpoint.Y;
-    Next.X = DrawVerts[0]->X + Object->Midpoint.X;
-    Next.Y = DrawVerts[0]->Y + Object->Midpoint.Y;
+    Cur.X = DrawVerts->Verts[cur].X + Object->Midpoint.X;
+    Cur.Y = DrawVerts->Verts[cur].Y + Object->Midpoint.Y;
+    Next.X = DrawVerts->Verts[0].X + Object->Midpoint.X;
+    Next.Y = DrawVerts->Verts[0].Y + Object->Midpoint.Y;
     DrawLineWidth(Buffer, &Cur, &Next, &Model->Color, Model->LineWidth);
 }
 
@@ -183,13 +181,17 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
         Player->Model = PushToMemorySegment(&GameState->SceneMemorySegment, object_model);
         object_model *PlayerModel = Player->Model;
         PlayerModel->NumVertices = PLAYER_NUM_VERTICES;
-        PlayerModel->StartVerts = PushArrayToMemorySegment(&GameState->SceneMemorySegment, PLAYER_NUM_VERTICES, vec_2 *);
-        PlayerModel->DrawVerts = PushArrayToMemorySegment(&GameState->SceneMemorySegment, PLAYER_NUM_VERTICES, vec_2 *);
+        PlayerModel->StartVerts = PushToMemorySegment(&GameState->SceneMemorySegment, vert_set);
+        PlayerModel->DrawVerts = PushToMemorySegment(&GameState->SceneMemorySegment, vert_set);
 
         for (int i = 0; i < PLAYER_NUM_VERTICES; ++i)
         {
-            PlayerModel->StartVertices[i] = 0.0f;
-            PlayerModel->DrawVertices[i] = 0.0f;
+            PlayerModel->StartVerts->Verts = PushArrayToMemorySegment(&GameState->SceneMemorySegment, PLAYER_NUM_VERTICES, vec_2);
+        }
+
+        for (int i = 0; i < PLAYER_NUM_VERTICES; ++i)
+        {
+            PlayerModel->DrawVerts->Verts = PushArrayToMemorySegment(&GameState->SceneMemorySegment, PLAYER_NUM_VERTICES, vec_2);
         }
 
         PlayerModel->LineWidth = 1.5f;
