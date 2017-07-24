@@ -5,79 +5,6 @@
 
 #include "platform.h"
 
-struct vec_2
-{
-    float X;
-    float Y;
-};
-
-struct color_triple
-{
-    uint8_t Red;
-    uint8_t Blue;
-    uint8_t Green;
-};
-
-struct memory_segment
-{
-    uint32_t Size;
-    uint8_t *Storage;
-    uint32_t Used;
-};
-
-typedef enum object_type {
-    PLAYER,
-    ASTEROID_LARGE,
-    ASTEROID_MEDIUM,
-    ASTEROID_SMALL
-} object_type;
-
-struct object_model
-{
-    int NumVertices;
-    color_triple Color;
-    float LineWidth;
-};
-
-struct player_model : object_model
-{
-    vec_2 StartVertices[4];
-    vec_2 DrawVertices[4];
-};
-
-struct non_player_model : object_model
-{
-    vec_2 *StartVertices;
-    vec_2 *DrawVertices;
-};
-
-struct game_object
-{
-    object_type Type;
-    object_model Model;
-    vec_2 Midpoint;
-    float X_Momentum;
-    float Y_Momentum;
-    float OffsetAngle;
-    float AngularMomentum;
-};
-
-struct player_object : game_object
-{
-
-};
-
-struct non_player_object : game_object
-{
-
-};
-
-struct game_state
-{
-    memory_segment SceneMemorySegment;
-    player_object *Player;
-};
-
 // Thoughts for allocating into this game memory...
 // Need to allocate a chunk of space for the asteroids somehow (even just VirtualAlloc), and assign the resulting pointer to Memory.Asteroids
 // Then, to create an asteroid, build a new asteroid within a function, then do a memcpy(), where the location is equal
@@ -89,7 +16,7 @@ struct game_state
 
 // Note that this may not be portable, as it relies upon the way Windows structures
 // bitmap data in memory.
-void SetPixelInBuffer(platform_bitmap_buffer *Buffer, vec_2 *Coords, color_triple *Colors, float Brightness)
+void SetPixelInBuffer(platform_bitmap_buffer *Buffer, vec_2 *Coords, color_triple *Colors)
 {
     if (!(Buffer->Memory)) return;
     int X = (Coords->X < 0) ? ((int)Coords->X + Buffer->Width) : ((int)Coords->X % Buffer->Width);
@@ -124,7 +51,7 @@ void DrawLineWidth(platform_bitmap_buffer *Buffer, vec_2 *Point1, vec_2 *Point2,
         vec_2 Coords;
         Coords.X = x0;
         Coords.Y = y0;
-        SetPixelInBuffer(Buffer, &Coords, Color, max(0,100*(abs(err-dx+dy)/ed-wd+1)));
+        SetPixelInBuffer(Buffer, &Coords, Color);
         e2 = err; x2 = x0;
         if (2*e2 >= -dx)
         {
@@ -134,7 +61,7 @@ void DrawLineWidth(platform_bitmap_buffer *Buffer, vec_2 *Point1, vec_2 *Point2,
                 Coords2.X = x0;
                 Coords2.Y = y2 += sy;
 
-                SetPixelInBuffer(Buffer, &Coords2, Color, max(0,100*(abs(err-dx+dy)/ed-wd+1)));
+                SetPixelInBuffer(Buffer, &Coords2, Color);
             }
             if (x0 == x1) break;
             e2 = err; err -= dy; x0 += sx;
@@ -146,7 +73,7 @@ void DrawLineWidth(platform_bitmap_buffer *Buffer, vec_2 *Point1, vec_2 *Point2,
                 vec_2 Coords2;
                 Coords2.X = x2 += sx;
                 Coords2.Y = y0;
-                SetPixelInBuffer(Buffer, &Coords2, Color, max(0,100*(abs(err-dx+dy)/ed-wd+1)));
+                SetPixelInBuffer(Buffer, &Coords2, Color);
             }
             if (y0 == y1) break;
             err += dx; y0 += sy;
@@ -156,33 +83,25 @@ void DrawLineWidth(platform_bitmap_buffer *Buffer, vec_2 *Point1, vec_2 *Point2,
 
 void SetObjectModelForDraw(game_object *Object)
 {
+    object_model *Model = Object->Model;
     float Theta = Object->OffsetAngle;
-    if (Object->Type == object_type::PLAYER)
+    vec_2 **StartVerts = Model->StartVertices;
+    vec_2 **DrawVerts = Model->DrawVertices;
+
+    for (int i = 0; i < Model->NumVertices; ++i)
     {
-        player_model PlayerModel = (player_model)Object->Model;
-        for (int i = 0; i < PlayerModel.NumVertices; ++i)
-        {
-            float X_Orig = PlayerModel.StartVertices[i].X;
-            float Y_Orig = PlayerModel.StartVertices[i].Y;
-            PlayerModel.DrawVertices[i].X = (X_Orig * cos(Theta)) - (Y_Orig * sin(Theta));
-            PlayerModel.DrawVertices[i].Y = (X_Orig * sin(Theta)) + (Y_Orig * cos(Theta));
-        }
-    }
-    else
-    {
-        non_player_model NP_Model = (non_player_model)Object->Model;
-        for (int i = 0; i < NP_Model.NumVertices; ++i)
-        {
-            float X_Orig = NP_Model.StartVertices[i].X;
-            float Y_Orig = NP_Model.StartVertices[i].Y;
-            NP_Model.DrawVertices[i].X = (X_Orig * cos(Theta)) - (Y_Orig * sin(Theta));
-            NP_Model.DrawVertices[i].Y = (X_Orig * sin(Theta)) + (Y_Orig * cos(Theta));
-        }
+        vec_2 *S_V = StartVerts[i];
+        vec_2 *D_V = DrawVerts[i];
+        float X_Orig = S_V->X;
+        float Y_Orig = S_V->Y;
+        D_V->X = (X_Orig * cos(Theta)) - (Y_Orig * sin(Theta));
+        D_V->Y = (X_Orig * sin(Theta)) + (Y_Orig * cos(Theta));
     }
 }
 
 inline void HandleObjectEdgeWarping(game_object *Object, int Width, int Height)
 {
+    vec_2 Mid = Object->Midpoint;
     if (Object->Midpoint.X < 0)
     {
         Object->Midpoint.X += Width;
@@ -207,36 +126,40 @@ void DrawObjectModelInBuffer(platform_bitmap_buffer *Buffer, game_object *Object
 
     int cur = 0, next = 1;
     vec_2 Cur, Next;
+    object_model *Model = Object->Model;
+    vec_2 **DrawVerts = Model->DrawVertices;
+    vec_2 **StartVerts = Model->StartVertices;
 
-    for (int i = 0; i < Object->Model.NumVertices - 1; ++i)
+    for (int i = 0; i < Model->NumVertices - 1; ++i)
     {
-        Cur.X = Object->Model.DrawVertices[cur].X + Object->Midpoint.X;
-        Cur.Y = Object->Model.DrawVertices[cur].Y + Object->Midpoint.Y;
-        Next.X = Object->Model.DrawVertices[next].X + Object->Midpoint.X;
-        Next.Y = Object->Model.DrawVertices[next].Y + Object->Midpoint.Y;
-        DrawLineWidth(Buffer, &Cur, &Next, &(Object->Model.Color), Object->Model.LineWidth);
+        Cur.X = DrawVerts[cur]->X + Object->Midpoint.X;
+        Cur.Y = DrawVerts[cur]->Y + Object->Midpoint.Y;
+        Next.X = DrawVerts[next]->X + Object->Midpoint.X;
+        Next.Y = DrawVerts[next]->Y + Object->Midpoint.Y;
+        DrawLineWidth(Buffer, &Cur, &Next, &Model->Color, Model->LineWidth);
         ++cur;
-        if (i < 2) ++next;
+        if (i < Model->NumVertices - 2) ++next;
     }
-    Cur.X = Object->Model.DrawVertices[cur].X + Object->Midpoint.X;
-    Cur.Y = Object->Model.DrawVertices[cur].Y + Object->Midpoint.Y;
-    Next.X = Object->Model.DrawVertices[0].X + Object->Midpoint.X;
-    Next.Y = Object->Model.DrawVertices[0].Y + Object->Midpoint.Y;
-    DrawLineWidth(Buffer, &Cur, &Next, &(Object->Model.Color), Object->Model.LineWidth);
+    Cur.X = DrawVerts[cur]->X + Object->Midpoint.X;
+    Cur.Y = DrawVerts[cur]->Y + Object->Midpoint.Y;
+    Next.X = DrawVerts[0]->X + Object->Midpoint.X;
+    Next.Y = DrawVerts[0]->Y + Object->Midpoint.Y;
+    DrawLineWidth(Buffer, &Cur, &Next, &Model->Color, Model->LineWidth);
 }
 
 void BeginMemorySegment(memory_segment *Segment, uint32_t Size, uint8_t *Storage)
 {
     Segment->Size = Size;
-    Segment->Base = Storage;
+    Segment->BaseStorageLocation = Storage;
     Segment->Used = 0;
 }
 
-#define AssignToMemorySegment(Segment, type) (type *)AssignToMemorySegment_(Segment, sizeof(type))
+#define PushArrayToMemorySegment(Segment, Count, type) (type *)AssignToMemorySegment_(Segment, (Count)*sizeof(type))
+#define PushToMemorySegment(Segment, type) (type *)AssignToMemorySegment_(Segment, sizeof(type))
 void * AssignToMemorySegment_(memory_segment *Segment, uint32_t Size)
 {
-    void *Result = Segment->Base + Segment->Used;
-    Segment->Used += size;
+    void *Result = Segment->BaseStorageLocation + Segment->Used;
+    Segment->Used += Size;
     return Result;
 }
 
@@ -251,26 +174,41 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
                         (uint8_t *)&Memory->PermanentStorage + sizeof(game_state));
 
         
-        player_object Player = {};
-        player_model P_Model = {};
-        Player.Type = PLAYER;
-        Player.Model = P_Model;
-        Player.Model.LineWidth = 1.5f;
+        GameState->Player = PushToMemorySegment(&GameState->SceneMemorySegment, game_object);
+        GameState->Player->Type = PLAYER;
+        game_object *Player = GameState->Player;
+        Player->Midpoint.X = OffscreenBuffer->Width / 2;
+        Player->Midpoint.Y = OffscreenBuffer->Height / 10;
 
-        Player.Midpoint.X = OffscreenBuffer->Width / 2;
-        Player.Midpoint.Y = OffscreenBuffer->Height / 10;
-        vec_2 PlayerLeft, PlayerTop, PlayerRight, PlayerBottom;
-        PlayerLeft.X = -20.0f, PlayerLeft.Y = -20.0f;
-        PlayerTop.X = 0.0f, PlayerTop.Y = 40.0f;
-        PlayerRight.X = 20.0f, PlayerRight.Y = -20.0f;
-        PlayerBottom.X = 0.0f, PlayerBottom.Y = 0.0f;
-        Player.Model.StartVertices[0] = PlayerLeft, Player.Model.StartVertices[1] = PlayerTop, Player.Model.StartVertices[2] = PlayerRight, Player.Model.StartVertices[3] = PlayerBottom;
-		Player.Model.DrawVertices[0] = PlayerLeft, Player.Model.DrawVertices[1] = PlayerTop, Player.Model.DrawVertices[2] = PlayerRight, Player.Model.DrawVertices[3] = PlayerBottom;
+        Player->Model = PushToMemorySegment(&GameState->SceneMemorySegment, object_model);
+        object_model *PlayerModel = Player->Model;
+        PlayerModel->NumVertices = PLAYER_NUM_VERTICES;
+        PlayerModel->StartVerts = PushArrayToMemorySegment(&GameState->SceneMemorySegment, PLAYER_NUM_VERTICES, vec_2 *);
+        PlayerModel->DrawVerts = PushArrayToMemorySegment(&GameState->SceneMemorySegment, PLAYER_NUM_VERTICES, vec_2 *);
 
-		Player.Model.Color.Red = 100, Player.Model.Color.Blue = 100, Player.Model.Color.Green = 100;
-        Player.AngularMomentum = 0.1f;
+        for (int i = 0; i < PLAYER_NUM_VERTICES; ++i)
+        {
+            PlayerModel->StartVertices[i] = 0.0f;
+            PlayerModel->DrawVertices[i] = 0.0f;
+        }
 
-        GameState->Player = Player;
+        PlayerModel->LineWidth = 1.5f;
+
+
+        /*S_Verts[0].X = -20.0f, S_Verts[0].Y = -20.0f;
+        D_Verts[0].X = -20.0f, D_Verts[0].Y = -20.0f;
+        S_Verts[1].X = 0.0f, S_Verts[1].Y = 40.0f;
+        D_Verts[1].X = 0.0f, D_Verts[1].Y = 40.0f;
+        S_Verts[2].X = 20.0f, S_Verts[2].Y = -20.0f;
+        D_Verts[2].X = 20.0f, D_Verts[2].Y = -20.0f;
+        S_Verts[3].X = 0.0f, S_Verts[3].Y = 0.0f;
+        D_Verts[3].X = 0.0f, D_Verts[3].Y = 0.0f;
+        */
+
+		PlayerModel->Color.Red = 100, PlayerModel->Color.Blue = 100, PlayerModel->Color.Green = 100;
+        Player->X_Momentum = 0.0f, Player->Y_Momentum = 0.0f;
+        Player->OffsetAngle = 0.0f;
+        Player->AngularMomentum = 0.1f;
 
         /*Asteroid = {};
         A_Model = {};
@@ -302,31 +240,34 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
         Memory->IsInitialized = true;
     }
 
+    game_object *Player = GameState->Player;
+    object_model *PlayerModel = Player->Model;
+
     if (PlayerInput->Start_Pressed)
     {
         PostQuitMessage(0);
     }
     if (PlayerInput->B_Pressed)
     {
-        GameState->Player.Model.Color.Red = 0, GameState->Player.Model.Color.Blue = 200;
+        PlayerModel->Color.Red = 0, PlayerModel->Color.Blue = 200;
     }
 
-    GameState->Player.OffsetAngle += GameState->Player.AngularMomentum * (PlayerInput->LTrigger + PlayerInput->RTrigger);
+    Player->OffsetAngle += Player->AngularMomentum * (PlayerInput->LTrigger + PlayerInput->RTrigger);
     //Asteroid.OffsetAngle += Asteroid.AngularMomentum;
 
-    GameState->Player.X_Momentum += (PlayerInput->NormalizedLX * PlayerInput->Magnitude) * .5f;
-    GameState->Player.Y_Momentum += (PlayerInput->NormalizedLY * PlayerInput->Magnitude) * .5f;
+    Player->X_Momentum += (PlayerInput->NormalizedLX * PlayerInput->Magnitude) * .5f;
+    Player->Y_Momentum += (PlayerInput->NormalizedLY * PlayerInput->Magnitude) * .5f;
 
-    GameState->Player.Midpoint.X += GameState->Player.X_Momentum;
-    GameState->Player.Midpoint.Y += GameState->Player.Y_Momentum;
+    Player->Midpoint.X += Player->X_Momentum;
+    Player->Midpoint.Y += Player->Y_Momentum;
 
     //Asteroid.Midpoint.X += Asteroid.X_Momentum;
     //Asteroid.Midpoint.Y += Asteroid.Y_Momentum;
 
     //HandleObjectEdgeWarping(&Asteroid, OffscreenBuffer->Width, OffscreenBuffer->Height);
-    HandleObjectEdgeWarping(&GameState->Player, OffscreenBuffer->Width, OffscreenBuffer->Height);
+    HandleObjectEdgeWarping(Player, OffscreenBuffer->Width, OffscreenBuffer->Height);
     //SetObjectModelForDraw(&Asteroid);
-    SetObjectModelForDraw(&GameState->Player);
+    SetObjectModelForDraw(Player);
     //DrawObjectModelInBuffer(OffscreenBuffer, &Asteroid);
-    DrawObjectModelInBuffer(OffscreenBuffer, &GameState->Player);
+    DrawObjectModelInBuffer(OffscreenBuffer, Player);
 }
