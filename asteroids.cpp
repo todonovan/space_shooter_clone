@@ -161,6 +161,12 @@ void * AssignToMemorySegment_(memory_segment *Segment, uint32_t Size)
     return Result;
 }
 
+void SetVertValue(vert_set *VertSet, uint32_t VertIndex, float XVal, float YVal)
+{
+    VertSet->Verts[VertIndex].X = XVal;
+    VertSet->Verts[VertIndex].Y = YVal;
+}
+
 void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenBuffer, platform_sound_buffer *SoundBuffer, platform_player_input *PlayerInput)
 {
     game_state *GameState = (game_state *)Memory->PermanentStorage;
@@ -169,7 +175,7 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
         // Set up game memory here!
 
         BeginMemorySegment(&GameState->SceneMemorySegment, (Memory->PermanentStorageSize - sizeof(game_state)),
-                        (uint8_t *)&Memory->PermanentStorage + sizeof(game_state));
+                        (uint8_t *)Memory->PermanentStorage + sizeof(game_state));
 
         
         GameState->Player = PushToMemorySegment(&GameState->SceneMemorySegment, game_object);
@@ -178,23 +184,24 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
         Player->Midpoint.X = OffscreenBuffer->Width / 2;
         Player->Midpoint.Y = OffscreenBuffer->Height / 10;
 
-        Player->Model = PushToMemorySegment(&GameState->SceneMemorySegment, object_model);
-        object_model *PlayerModel = Player->Model;
-        PlayerModel->NumVertices = PLAYER_NUM_VERTICES;
-        PlayerModel->StartVerts = PushToMemorySegment(&GameState->SceneMemorySegment, vert_set);
-        PlayerModel->DrawVerts = PushToMemorySegment(&GameState->SceneMemorySegment, vert_set);
+        GameState->Player->Model = PushToMemorySegment(&GameState->SceneMemorySegment, object_model);
+        GameState->Player->Model->NumVertices = PLAYER_NUM_VERTICES;
+        GameState->Player->Model->StartVerts = PushToMemorySegment(&GameState->SceneMemorySegment, vert_set);
+        GameState->Player->Model->StartVerts->Verts = PushArrayToMemorySegment(&GameState->SceneMemorySegment, PLAYER_NUM_VERTICES, vec_2);
 
-        for (int i = 0; i < PLAYER_NUM_VERTICES; ++i)
-        {
-            PlayerModel->StartVerts->Verts = PushArrayToMemorySegment(&GameState->SceneMemorySegment, PLAYER_NUM_VERTICES, vec_2);
-        }
+		GameState->Player->Model->DrawVerts = PushToMemorySegment(&GameState->SceneMemorySegment, vert_set);
+        GameState->Player->Model->DrawVerts->Verts = PushArrayToMemorySegment(&GameState->SceneMemorySegment, PLAYER_NUM_VERTICES, vec_2);
 
-        for (int i = 0; i < PLAYER_NUM_VERTICES; ++i)
-        {
-            PlayerModel->DrawVerts->Verts = PushArrayToMemorySegment(&GameState->SceneMemorySegment, PLAYER_NUM_VERTICES, vec_2);
-        }
+        SetVertValue(GameState->Player->Model->StartVerts, 0, -20.0f, -20.0f);
+        SetVertValue(GameState->Player->Model->StartVerts, 1, 0.0f, 40.0f);
+        SetVertValue(GameState->Player->Model->StartVerts, 2, 20.0f, -20.0f);
+        SetVertValue(GameState->Player->Model->StartVerts, 3, 0.0f, 0.0f);
+        SetVertValue(GameState->Player->Model->DrawVerts, 0, -20.0f, -20.0f);
+        SetVertValue(GameState->Player->Model->DrawVerts, 1, 0.0f, 40.0f);
+        SetVertValue(GameState->Player->Model->DrawVerts, 2, 20.0f, -20.0f);
+        SetVertValue(GameState->Player->Model->DrawVerts, 3, 0.0f, 0.0f);
 
-        PlayerModel->LineWidth = 1.5f;
+        GameState->Player->Model->LineWidth = 1.5f;
 
 
         /*S_Verts[0].X = -20.0f, S_Verts[0].Y = -20.0f;
@@ -207,7 +214,7 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
         D_Verts[3].X = 0.0f, D_Verts[3].Y = 0.0f;
         */
 
-		PlayerModel->Color.Red = 100, PlayerModel->Color.Blue = 100, PlayerModel->Color.Green = 100;
+		GameState->Player->Model->Color.Red = 100, GameState->Player->Model->Color.Blue = 100, GameState->Player->Model->Color.Green = 100;
         Player->X_Momentum = 0.0f, Player->Y_Momentum = 0.0f;
         Player->OffsetAngle = 0.0f;
         Player->AngularMomentum = 0.1f;
@@ -269,7 +276,7 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
     //HandleObjectEdgeWarping(&Asteroid, OffscreenBuffer->Width, OffscreenBuffer->Height);
     HandleObjectEdgeWarping(Player, OffscreenBuffer->Width, OffscreenBuffer->Height);
     //SetObjectModelForDraw(&Asteroid);
-    SetObjectModelForDraw(Player);
+    SetObjectModelForDraw(GameState->Player);
     //DrawObjectModelInBuffer(OffscreenBuffer, &Asteroid);
     DrawObjectModelInBuffer(OffscreenBuffer, Player);
 }
