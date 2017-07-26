@@ -4,7 +4,6 @@
 #include <math.h>
 #include <xinput.h>
 #include <dsound.h>
-#include <stdexcept>
 
 #include "platform.h"
 
@@ -13,8 +12,8 @@ struct internal_game_window
     HWND WindowHandle;
     RECT ClientRect;
     HDC DeviceContext;
-    uint16_t Width;
-    uint16_t Height;
+    uint64_t Width;
+    uint64_t Height;
 };
 
 #include "asteroids.cpp"
@@ -65,7 +64,7 @@ inline void ClearOffscreenBuffer()
 
 void DrawToWindow(HDC DrawDC)
 {
-    StretchDIBits(DrawDC, 0, 0, GameWindow.Width, GameWindow.Height, 0, 0, GlobalBackbuffer.Width,
+    StretchDIBits(DrawDC, 0, 0, (int)GameWindow.Width, (int)GameWindow.Height, 0, 0, GlobalBackbuffer.Width,
                   GlobalBackbuffer.Height, GlobalBackbuffer.Memory, &(GlobalBackbuffer.InfoStruct), DIB_RGB_COLORS, SRCCOPY);
 }
 
@@ -78,7 +77,7 @@ platform_player_input GetPlayerInput(DWORD ControllerNumber)
     {
         float LX = ControllerState.Gamepad.sThumbLX;
         float LY = ControllerState.Gamepad.sThumbLY;
-        float magnitude = sqrt((LX * LX) + (LY * LY));
+        float magnitude = sqrtf((LX * LX) + (LY * LY));
         PlayerInput.NormalizedLX = LX / magnitude;
         PlayerInput.NormalizedLY = LY / magnitude;
 
@@ -125,8 +124,8 @@ platform_player_input GetPlayerInput(DWORD ControllerNumber)
 
         PlayerInput.A_Pressed = (ControllerState.Gamepad.wButtons & XINPUT_GAMEPAD_A);
         PlayerInput.B_Pressed = (ControllerState.Gamepad.wButtons & XINPUT_GAMEPAD_B);
-		PlayerInput.LTrigger = normalizedLeftTrig * 1.25;
-		PlayerInput.RTrigger = normalizedRightTrig * 1.25;
+		PlayerInput.LTrigger = normalizedLeftTrig * 1.25f;
+		PlayerInput.RTrigger = normalizedRightTrig * 1.25f;
         PlayerInput.Start_Pressed = (ControllerState.Gamepad.wButtons & XINPUT_GAMEPAD_START);
     }
 
@@ -187,7 +186,7 @@ void FillSoundBuffer(DWORD ByteToLock, DWORD BytesToWrite)
         DWORD AudioRegion2SampleCount = AudioBytes2/GlobalSoundBuffer.BytesPerSample;
         for (DWORD i = 0; i < AudioRegion1SampleCount; ++i)
         {
-            float t = 2.0f * 3.14159 * (static_cast<float>(GlobalSoundBuffer.SampleIndex) / static_cast<float>(GlobalSoundBuffer.WavePeriod));
+            float t = 2.0f * 3.14159f * ((float)(GlobalSoundBuffer.SampleIndex) / (float)(GlobalSoundBuffer.WavePeriod));
             float SineValue = sinf(t);
             int16_t Sample = (int16_t)(SineValue * GlobalSoundBuffer.Volume);
             *SoundOut++ = Sample;
@@ -198,7 +197,7 @@ void FillSoundBuffer(DWORD ByteToLock, DWORD BytesToWrite)
         SoundOut = (int16_t *)AudioPtr2;
         for (DWORD i = 0; i < AudioRegion2SampleCount; ++i)
         {
-            float t = 2.0f * 3.14159 * (static_cast<float>(GlobalSoundBuffer.SampleIndex) / static_cast<float>(GlobalSoundBuffer.WavePeriod));
+            float t = 2.0f * 3.14159f * ((float)(GlobalSoundBuffer.SampleIndex) / (float)(GlobalSoundBuffer.WavePeriod));
             float SineValue = sinf(t);
             int16_t Sample = (int16_t)(SineValue * GlobalSoundBuffer.Volume);
             *SoundOut++ = Sample;
@@ -270,7 +269,7 @@ LARGE_INTEGER GetWallClock()
 
 float GetSecondsElapsed(LARGE_INTEGER StartTime, LARGE_INTEGER EndTime)
 {
-    float Result = (static_cast<float>(EndTime.QuadPart - StartTime.QuadPart) / static_cast<float>(PerfCountFrequency));
+    float Result = ((float)(EndTime.QuadPart - StartTime.QuadPart) / (float)(PerfCountFrequency));
     return Result;
 }
 
@@ -288,7 +287,7 @@ int CALLBACK WinMain(HINSTANCE Instance,
 
     int MonitorRefreshRate = 60;
     int GameUpdateRate = 60;
-    float ExpectedSecondsPerFrame = 1.0f / static_cast<float>(GameUpdateRate);
+    float ExpectedSecondsPerFrame = 1.0f / (float)(GameUpdateRate);
 
     // Set scheduler granularity to 1ms for Sleep() purposes
     timeBeginPeriod(1);
@@ -419,7 +418,7 @@ int CALLBACK WinMain(HINSTANCE Instance,
                 {
                     while (SecondsElapsedForFrame < ExpectedSecondsPerFrame)
                     {
-                        DWORD SleepLength = static_cast<DWORD>((1000.0f * (ExpectedSecondsPerFrame - SecondsElapsedForFrame)));
+                        DWORD SleepLength = (DWORD)((1000.0f * (ExpectedSecondsPerFrame - SecondsElapsedForFrame)));
 						if (SleepLength > 0)
 						{
 							Sleep(SleepLength);
@@ -434,10 +433,10 @@ int CALLBACK WinMain(HINSTANCE Instance,
 
                 LARGE_INTEGER EndCounter = GetWallClock();
                 float MilliSecsPerFrame = 1000.0f * (GetSecondsElapsed(LastCounter, EndCounter));
-				float MegaCyclesPerFrame = static_cast<float>(CPUCyclesElapsed / (1000.0f * 1000.0f));
+				float MegaCyclesPerFrame = (float)(CPUCyclesElapsed / (1000.0f * 1000.0f));
 
 				char Buffer[256];
-				sprintf(Buffer, "%.02fms/f, %.02fmc/f\n", MilliSecsPerFrame, MegaCyclesPerFrame);
+				sprintf_s(Buffer, "%.02fms/f, %.02fmc/f\n", MilliSecsPerFrame, MegaCyclesPerFrame);
                 OutputDebugStringA(Buffer);
 
                 LastCounter = GetWallClock();
