@@ -9,6 +9,8 @@
 #define Megabytes(Num) ((Num) * 1024 * 1024)
 #define ArrayCount(Array) (sizeof(Array) / sizeof((Array)[0]))
 
+// Constants
+
 #define PLAYER_NUM_VERTICES 4
 #define PLAYER_LINE_WIDTH 2.0f
 #define PLAYER_RED 200
@@ -23,6 +25,8 @@
 #define ASTEROID_RED 125
 #define ASTEROID_BLUE 125
 #define ASTEROID_GREEN 125
+
+#define MAX_NUM_SPAWNED_ASTEROIDS 100
 
 // What structs do we need here?
 /*

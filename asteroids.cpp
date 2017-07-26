@@ -25,11 +25,6 @@ typedef enum object_type {
     ASTEROID_SMALL
 } object_type;
 
-struct vert_set
-{
-    vec_2 *Verts;
-};
-
 struct object_model
 {
     int NumVertices;
@@ -37,6 +32,7 @@ struct object_model
     vert_set *DrawVerts;
     color_triple Color;
     float LineWidth;
+    bool IsVisible;
 };
 
 struct game_object
@@ -51,11 +47,34 @@ struct game_object
     float AngularMomentum;
 };
 
+struct vert_set
+{
+    vec_2 *Verts;
+};
+
+struct asteroid_set
+{
+    game_object *Asteroids;
+};
+
 struct game_state
 {
     memory_segment SceneMemorySegment;
     game_object *Player;
-    game_object *Asteroid;
+    uint32_t NumSpawnedAsteroids;
+    asteroid_set *SpawnedAsteroids;
+};
+
+struct loaded_resource_memory
+{
+    memory_segment Segment;
+    uint32_t Test;
+};
+
+struct game_permanent_memory
+{
+    game_state *GameState;
+    loaded_resource_memory *Resources;
 };
 
 // Note that this may not be portable, as it relies upon the way Windows structures
@@ -186,7 +205,7 @@ inline void HandleObjectEdgeWarping(game_object *Object, int Width, int Height)
 }
 */
 
-void DrawObjectModelInBuffer(platform_bitmap_buffer *Buffer, game_object *Object)
+void DrawObjectModelIntoBuffer(platform_bitmap_buffer *Buffer, game_object *Object)
 {
     if (!(Buffer->Memory)) return;
 
@@ -235,11 +254,13 @@ void SetVertValue(vert_set *VertSet, uint32_t VertIndex, float XVal, float YVal)
     VertSet->Verts[VertIndex].Y = YVal;
 }
 
-game_object *SpawnAsteroid(memory_segment *MemorySegment, object_type AsteroidType, float X_Spawn, float Y_Spawn, float X_Mo, float Y_Mo, float AngularMomentum)
+game_object *SpawnAsteroid(game_state *GameState, memory_segment *MemorySegment, object_type AsteroidType, float X_Spawn, float Y_Spawn, float X_Mo, float Y_Mo, float AngularMomentum)
 {
-    game_object *NewAsteroid = PushToMemorySegment(MemorySegment, game_object);
+    GameState->SpawnedAsteroids->Asteroids[GameState->NumSpawnedAsteroids] = PushToMemorySegment(MemorySegment, game_object);
+    game_object *NewAsteroid = GameState->SpawnedAsteroids->Asteroids[GameState->NumSpawnedAsteroids];
     if (NewAsteroid)
     {
+        GameState->NumSpawnedAsteroids += 1;
         NewAsteroid->Type = AsteroidType;
         NewAsteroid->Model = PushToMemorySegment(MemorySegment, object_model);
         object_model *Model = NewAsteroid->Model;
@@ -262,6 +283,7 @@ game_object *SpawnAsteroid(memory_segment *MemorySegment, object_type AsteroidTy
                     Model->NumVertices = ASTEROID_SMALL_NUM_VERTICES;
                 } break;
             }
+
             Model->StartVerts = PushToMemorySegment(MemorySegment, vert_set);
             Model->StartVerts->Verts = PushArrayToMemorySegment(MemorySegment, Model->NumVertices, vec_2);
             Model->DrawVerts = PushToMemorySegment(MemorySegment, vert_set);
@@ -276,6 +298,7 @@ game_object *SpawnAsteroid(memory_segment *MemorySegment, object_type AsteroidTy
             NewAsteroid->Y_Momentum = Y_Mo;
             NewAsteroid->OffsetAngle = 0.0f;
             NewAsteroid->AngularMomentum = AngularMomentum;
+            NewAsteroid->IsVisible = true;
         }
         else
         {
@@ -284,10 +307,38 @@ game_object *SpawnAsteroid(memory_segment *MemorySegment, object_type AsteroidTy
     }
     else
     {
-        // Out of memory; handle error -- logging? etc? 
+        // Out of memory; handle error -- logging? etc?
     }
-
+    GameState->NumSpawnedAsteroids += 1;
     return NewAsteroid;
+}
+
+void HandleSceneEdgeWarping(game_state *GameState, int Width, int Height)
+{
+    HandleObjectEdgeWarping(GameState->Player, Width, Height);
+    for (int i = 0; i < GameState->NumSpawnedAsteroids; ++i)
+    {
+        HandleObjectEdgeWarping(GameState->SpawnedAsteroids->Asteroids[i], Width, Height);
+    }
+}
+
+void SetSceneModelsForDraw(game_state *GameState)
+{
+    SetObjectModelForDraw(GameState->Player);
+    for (int i = 0; i < GameState->NumSpawnedAsteroids; ++i)
+    {
+        SetObjectModelForDraw(GameState->SpawnedAsteroids->Asteroids[i]);
+    }
+}
+
+void DrawSceneModelsIntoBuffer(platform_bitmap_buffer *Buffer, game_state *GameState)
+{
+    if (GameState->Player->IsVisible) DrawObjectModelIntoBuffer(Buffer, GameState->Player);
+    for (int i = 0; i < GameState->NumSpawnedAsteroids; ++i)
+    {
+        game_object *Asteroid = GameState->SpawnedAsteroids->Asteroids[i];
+        if (Asteroid->IsVisible) DrawObjectModelIntoBuffer(Buffer, Asteroid);
+    }
 }
 
 void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenBuffer, platform_sound_buffer *SoundBuffer, platform_player_input *PlayerInput)
@@ -297,10 +348,10 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
     {
         // Set up game memory here!
 
-        BeginMemorySegment(&GameState->SceneMemorySegment, (Memory->PermanentStorageSize - sizeof(game_state)),
+        BeginMemorySegment(&GameState->SceneMemorySegment, (Memory->PermanentStorageSize - sizeof(game_state)) / 2,
                         (uint8_t *)Memory->PermanentStorage + sizeof(game_state));
 
-        
+
         GameState->Player = PushToMemorySegment(&GameState->SceneMemorySegment, game_object);
         GameState->Player->Type = PLAYER;
         game_object *Player = GameState->Player;
@@ -316,7 +367,7 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
 		P_Model->DrawVerts = PushToMemorySegment(&GameState->SceneMemorySegment, vert_set);
         P_Model->DrawVerts->Verts = PushArrayToMemorySegment(&GameState->SceneMemorySegment, PLAYER_NUM_VERTICES, vec_2);
 
-        // NOTE! These values will need to be stored in a 'resource' file -- a config text file, whatever. 
+        // NOTE! These values will need to be stored in a 'resource' file -- a config text file, whatever.
         SetVertValue(GameState->Player->Model->StartVerts, 0, -20.0f, -20.0f);
         SetVertValue(GameState->Player->Model->StartVerts, 1, 0.0f, 40.0f);
         SetVertValue(GameState->Player->Model->StartVerts, 2, 20.0f, -20.0f);
@@ -329,6 +380,11 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
         Player->OffsetAngle = 0.0f;
         Player->AngularMomentum = 0.1f;
         Player->MaxMomentum = 30.0f;
+        Player->IsVisible = true;
+
+        GameState->NumSpawnedAsteroids = 0;
+        GameState->SpawnedAsteroids = PushToMemorySegment(&GameState->SceneMemorySegment, asteroid_set);
+        GameState->SpawnedAsteroids->Asteroids = PushArrayToMemorySegment(&GameState->SceneMemorySegment, MAX_NUM_SPAWNED_ASTEROIDS, game_object);
 
         Memory->IsInitialized = true;
     }
@@ -359,9 +415,9 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
 
     game_object *Asteroid = GameState->Asteroid;
     Player->OffsetAngle += Player->AngularMomentum * (PlayerInput->LTrigger + PlayerInput->RTrigger);
-    
+
     if (Asteroid) Asteroid->OffsetAngle += Asteroid->AngularMomentum;
-    
+
     // Note: This procedure currently gives bad control feel; must be reworked.
     //AdjustMomentumValuesAgainstMax(Player, PlayerInput->NormalizedLX * PlayerInput->Magnitude,
     //                              PlayerInput->NormalizedLY * PlayerInput->Magnitude);
@@ -378,10 +434,7 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
         Asteroid->Midpoint.Y += Asteroid->Y_Momentum;
     }
 
-    if (Asteroid) HandleObjectEdgeWarping(Asteroid, OffscreenBuffer->Width, OffscreenBuffer->Height);
-    HandleObjectEdgeWarping(Player, OffscreenBuffer->Width, OffscreenBuffer->Height);
-    if (Asteroid) SetObjectModelForDraw(Asteroid);
-    SetObjectModelForDraw(Player);
-    if (Asteroid) DrawObjectModelInBuffer(OffscreenBuffer, Asteroid);
-    DrawObjectModelInBuffer(OffscreenBuffer, Player);
+    HandleSceneEdgeWarping(GameState, OffscreenBuffer->Width, OffscreenBuffer->Height);
+    SetSceneModelsForDraw(GameState);
+    DrawSceneModelsIntoBuffer(OffscreenBuffer, GameState);
 }
