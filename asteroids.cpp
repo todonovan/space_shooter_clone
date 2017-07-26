@@ -5,14 +5,58 @@
 
 #include "platform.h"
 
-// Thoughts for allocating into this game memory...
-// Need to allocate a chunk of space for the asteroids somehow (even just VirtualAlloc), and assign the resulting pointer to Memory.Asteroids
-// Then, to create an asteroid, build a new asteroid within a function, then do a memcpy(), where the location is equal
-// to GameMemory.Asteroids + NumAsteroids, the length is sizeof(game_object), etc.
-// To iterate through the asteroids, use the NumAsteroids/pointer arithmetic again.
-// When despawning an asteroid, have to consolidate the memory. Simply do a memcpy() from the last asteroid to where the
-// asteroid was despawned, then decrement the NumAsteroids so the next asteroid to be added will get added to where the last one
-// used to be.
+struct vec_2
+{
+    float X;
+    float Y;
+};
+
+struct color_triple
+{
+    uint8_t Red;
+    uint8_t Blue;
+    uint8_t Green;
+};
+
+typedef enum object_type {
+    PLAYER,
+    ASTEROID_LARGE,
+    ASTEROID_MEDIUM,
+    ASTEROID_SMALL
+} object_type;
+
+struct vert_set
+{
+    vec_2 *Verts;
+};
+
+struct object_model
+{
+    int NumVertices;
+    vert_set *StartVerts;
+    vert_set *DrawVerts;
+    color_triple Color;
+    float LineWidth;
+};
+
+struct game_object
+{
+    object_type Type;
+    object_model *Model;
+    vec_2 Midpoint;
+    float X_Momentum;
+    float Y_Momentum;
+    float MaxMomentum;
+    float OffsetAngle;
+    float AngularMomentum;
+};
+
+struct game_state
+{
+    memory_segment SceneMemorySegment;
+    game_object *Player;
+    game_object *Asteroid;
+};
 
 // Note that this may not be portable, as it relies upon the way Windows structures
 // bitmap data in memory.
@@ -99,7 +143,6 @@ void SetObjectModelForDraw(game_object *Object)
 
 inline void HandleObjectEdgeWarping(game_object *Object, int Width, int Height)
 {
-    vec_2 Mid = Object->Midpoint;
     if (Object->Midpoint.X < 0)
     {
         Object->Midpoint.X += Width;
@@ -117,6 +160,31 @@ inline void HandleObjectEdgeWarping(game_object *Object, int Width, int Height)
         Object->Midpoint.Y -= Height;
     }
 }
+
+// TODO: This proc just doesn't feel right when moving the player ship. Will have to revise.
+// Will go back to unchecked top speed for now.
+/*void AdjustMomentumValuesAgainstMax(game_object *Object, float Input_X, float Input_Y)
+{
+    float raw_x = Object->X_Momentum + Input_X;
+    float raw_y = Object->Y_Momentum + Input_Y;
+    float magnitude = sqrt((raw_x * raw_x) + (raw_y * raw_y));
+    if (magnitude > Object->MaxMomentum)
+    {
+        float ratio_x = raw_x / magnitude;
+        float ratio_y = raw_y / magnitude;
+        float adjusted_x_momentum = Object->MaxMomentum * ratio_x;
+        float adjusted_y_momentum = Object->MaxMomentum * ratio_y;
+
+        Object->X_Momentum = adjusted_x_momentum;
+        Object->Y_Momentum =  adjusted_y_momentum;
+    }
+    else
+    {
+        Object->X_Momentum = raw_x;
+        Object->Y_Momentum = raw_y;
+    }
+}
+*/
 
 void DrawObjectModelInBuffer(platform_bitmap_buffer *Buffer, game_object *Object)
 {
@@ -167,6 +235,61 @@ void SetVertValue(vert_set *VertSet, uint32_t VertIndex, float XVal, float YVal)
     VertSet->Verts[VertIndex].Y = YVal;
 }
 
+game_object *SpawnAsteroid(memory_segment *MemorySegment, object_type AsteroidType, float X_Spawn, float Y_Spawn, float X_Mo, float Y_Mo, float AngularMomentum)
+{
+    game_object *NewAsteroid = PushToMemorySegment(MemorySegment, game_object);
+    if (NewAsteroid)
+    {
+        NewAsteroid->Type = AsteroidType;
+        NewAsteroid->Model = PushToMemorySegment(MemorySegment, object_model);
+        object_model *Model = NewAsteroid->Model;
+        if (Model)
+        {
+            // Yes, as currently coded, this could easily be replaced by a look up table. But, I am assuming that
+            // in the future, the spawn code will be slightly different in other ways for the different asteroid types.
+            switch (NewAsteroid->Type)
+            {
+                case ASTEROID_LARGE:
+                {
+                    Model->NumVertices = ASTEROID_LARGE_NUM_VERTICES;
+                } break;
+                case ASTEROID_MEDIUM:
+                {
+                    Model->NumVertices = ASTEROID_MEDIUM_NUM_VERTICES;
+                } break;
+                case ASTEROID_SMALL:
+                {
+                    Model->NumVertices = ASTEROID_SMALL_NUM_VERTICES;
+                } break;
+            }
+            Model->StartVerts = PushToMemorySegment(MemorySegment, vert_set);
+            Model->StartVerts->Verts = PushArrayToMemorySegment(MemorySegment, Model->NumVertices, vec_2);
+            Model->DrawVerts = PushToMemorySegment(MemorySegment, vert_set);
+            Model->DrawVerts->Verts = PushArrayToMemorySegment(MemorySegment, Model->NumVertices, vec_2);
+            Model->Color.Red = ASTEROID_RED;
+            Model->Color.Blue = ASTEROID_BLUE;
+            Model->Color.Green = ASTEROID_GREEN;
+            Model->LineWidth = ASTEROID_LINE_WIDTH;
+            NewAsteroid->Midpoint.X = X_Spawn;
+            NewAsteroid->Midpoint.Y = Y_Spawn;
+            NewAsteroid->X_Momentum = X_Mo;
+            NewAsteroid->Y_Momentum = Y_Mo;
+            NewAsteroid->OffsetAngle = 0.0f;
+            NewAsteroid->AngularMomentum = AngularMomentum;
+        }
+        else
+        {
+            // Out of memory for model struct; handle error -- logging? etc.?
+        }
+    }
+    else
+    {
+        // Out of memory; handle error -- logging? etc? 
+    }
+
+    return NewAsteroid;
+}
+
 void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenBuffer, platform_sound_buffer *SoundBuffer, platform_player_input *PlayerInput)
 {
     game_state *GameState = (game_state *)Memory->PermanentStorage;
@@ -184,67 +307,28 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
         Player->Midpoint.X = OffscreenBuffer->Width / 2;
         Player->Midpoint.Y = OffscreenBuffer->Height / 10;
 
-        GameState->Player->Model = PushToMemorySegment(&GameState->SceneMemorySegment, object_model);
-        GameState->Player->Model->NumVertices = PLAYER_NUM_VERTICES;
-        GameState->Player->Model->StartVerts = PushToMemorySegment(&GameState->SceneMemorySegment, vert_set);
-        GameState->Player->Model->StartVerts->Verts = PushArrayToMemorySegment(&GameState->SceneMemorySegment, PLAYER_NUM_VERTICES, vec_2);
+        Player->Model = PushToMemorySegment(&GameState->SceneMemorySegment, object_model);
+        object_model *P_Model = Player->Model;
+        P_Model->NumVertices = PLAYER_NUM_VERTICES;
+        P_Model->StartVerts = PushToMemorySegment(&GameState->SceneMemorySegment, vert_set);
+        P_Model->StartVerts->Verts = PushArrayToMemorySegment(&GameState->SceneMemorySegment, PLAYER_NUM_VERTICES, vec_2);
 
-		GameState->Player->Model->DrawVerts = PushToMemorySegment(&GameState->SceneMemorySegment, vert_set);
-        GameState->Player->Model->DrawVerts->Verts = PushArrayToMemorySegment(&GameState->SceneMemorySegment, PLAYER_NUM_VERTICES, vec_2);
+		P_Model->DrawVerts = PushToMemorySegment(&GameState->SceneMemorySegment, vert_set);
+        P_Model->DrawVerts->Verts = PushArrayToMemorySegment(&GameState->SceneMemorySegment, PLAYER_NUM_VERTICES, vec_2);
 
+        // NOTE! These values will need to be stored in a 'resource' file -- a config text file, whatever. 
         SetVertValue(GameState->Player->Model->StartVerts, 0, -20.0f, -20.0f);
         SetVertValue(GameState->Player->Model->StartVerts, 1, 0.0f, 40.0f);
         SetVertValue(GameState->Player->Model->StartVerts, 2, 20.0f, -20.0f);
         SetVertValue(GameState->Player->Model->StartVerts, 3, 0.0f, 0.0f);
-        SetVertValue(GameState->Player->Model->DrawVerts, 0, -20.0f, -20.0f);
-        SetVertValue(GameState->Player->Model->DrawVerts, 1, 0.0f, 40.0f);
-        SetVertValue(GameState->Player->Model->DrawVerts, 2, 20.0f, -20.0f);
-        SetVertValue(GameState->Player->Model->DrawVerts, 3, 0.0f, 0.0f);
 
-        GameState->Player->Model->LineWidth = 1.5f;
+        P_Model->LineWidth = PLAYER_LINE_WIDTH;
 
-
-        /*S_Verts[0].X = -20.0f, S_Verts[0].Y = -20.0f;
-        D_Verts[0].X = -20.0f, D_Verts[0].Y = -20.0f;
-        S_Verts[1].X = 0.0f, S_Verts[1].Y = 40.0f;
-        D_Verts[1].X = 0.0f, D_Verts[1].Y = 40.0f;
-        S_Verts[2].X = 20.0f, S_Verts[2].Y = -20.0f;
-        D_Verts[2].X = 20.0f, D_Verts[2].Y = -20.0f;
-        S_Verts[3].X = 0.0f, S_Verts[3].Y = 0.0f;
-        D_Verts[3].X = 0.0f, D_Verts[3].Y = 0.0f;
-        */
-
-		GameState->Player->Model->Color.Red = 100, GameState->Player->Model->Color.Blue = 100, GameState->Player->Model->Color.Green = 100;
+		P_Model->Color.Red = 100, P_Model->Color.Blue = 100, P_Model->Color.Green = 100;
         Player->X_Momentum = 0.0f, Player->Y_Momentum = 0.0f;
         Player->OffsetAngle = 0.0f;
         Player->AngularMomentum = 0.1f;
-
-        /*Asteroid = {};
-        A_Model = {};
-        Asteroid.Type = ASTEROID_LARGE;
-        Asteroid.Model = A_Model;
-        Asteroid.Model.LineWidth = 1.0f;
-
-        Asteroid.Midpoint.X = OffscreenBuffer->Width / 10;
-        Asteroid.Midpoint.Y = (OffscreenBuffer->Height / 10) * 7;
-        vec_2 AstLeft, AstTopLeft, AstTopRight, AstRight, AstBotRight, AstBotLeft;
-        AstLeft.X = -80.0f, AstLeft.Y = 0.0f;
-        AstTopLeft.X = -25.0f, AstTopLeft.Y = 100.0f;
-        AstTopRight.X = 30.0f, AstTopRight.Y = 85.0f;
-        AstRight.X = 45.0f, AstRight.Y = 2.0f;
-        AstBotRight.X = 20.0f, AstBotRight.Y = -35.0f;
-        AstBotLeft.X = -60.0f, AstBotLeft.Y = -70.0f;
-
-        Asteroid.Model.StartVertices[0] = Asteroid.Model.DrawVertices[0] = AstLeft;
-        Asteroid.Model.StartVertices[1] = Asteroid.Model.DrawVertices[1] = AstTopLeft;
-        Asteroid.Model.StartVertices[2] = Asteroid.Model.DrawVertices[2] = AstTopRight;
-        Asteroid.Model.StartVertices[3] = Asteroid.Model.DrawVertices[3] = AstRight;
-        Asteroid.Model.StartVertices[4] = Asteroid.Model.DrawVertices[4] = AstBotRight;
-        Asteroid.Model.StartVertices[5] = Asteroid.Model.DrawVertices[5] = AstBotLeft;
-
-        Asteroid.Model.Color.Red = 220, Asteroid.Model.Color.Blue = 220, Asteroid.Model.Color.Green = 200;
-        Asteroid.X_Momentum = -0.25f, Asteroid.Y_Momentum = -1.0f;
-        Asteroid.AngularMomentum = 0.005f;*/
+        Player->MaxMomentum = 30.0f;
 
         Memory->IsInitialized = true;
     }
@@ -256,27 +340,48 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
     {
         PostQuitMessage(0);
     }
+    if (PlayerInput->A_Pressed)
+    {
+        GameState->Asteroid = SpawnAsteroid(&GameState->SceneMemorySegment, ASTEROID_MEDIUM, OffscreenBuffer->Width / 10,
+                                            (OffscreenBuffer->Height / 10) * 7, -.25f, -1.0f, .005f);
+        vert_set *A_S_Verts = GameState->Asteroid->Model->StartVerts;
+        SetVertValue(A_S_Verts, 0, -80.0f, 0.0f);
+        SetVertValue(A_S_Verts, 1, -25.0f, 100.0f);
+        SetVertValue(A_S_Verts, 2, 30.0f, 85.0f);
+        SetVertValue(A_S_Verts, 3, 45.0f, 2.0f);
+        SetVertValue(A_S_Verts, 4, 20.0f, -35.0f);
+        SetVertValue(A_S_Verts, 5, -60.0f, -70.0f);
+    }
     if (PlayerInput->B_Pressed)
     {
         PlayerModel->Color.Red = 0, PlayerModel->Color.Blue = 200;
     }
 
+    game_object *Asteroid = GameState->Asteroid;
     Player->OffsetAngle += Player->AngularMomentum * (PlayerInput->LTrigger + PlayerInput->RTrigger);
-    //Asteroid.OffsetAngle += Asteroid.AngularMomentum;
+    
+    if (Asteroid) Asteroid->OffsetAngle += Asteroid->AngularMomentum;
+    
+    // Note: This procedure currently gives bad control feel; must be reworked.
+    //AdjustMomentumValuesAgainstMax(Player, PlayerInput->NormalizedLX * PlayerInput->Magnitude,
+    //                              PlayerInput->NormalizedLY * PlayerInput->Magnitude);
 
-    Player->X_Momentum += (PlayerInput->NormalizedLX * PlayerInput->Magnitude) * .5f;
-    Player->Y_Momentum += (PlayerInput->NormalizedLY * PlayerInput->Magnitude) * .5f;
+    Player->X_Momentum += (PlayerInput->NormalizedLX * PlayerInput->Magnitude * 0.8f);
+    Player->Y_Momentum += (PlayerInput->NormalizedLY * PlayerInput->Magnitude * 0.8f);
 
     Player->Midpoint.X += Player->X_Momentum;
     Player->Midpoint.Y += Player->Y_Momentum;
 
-    //Asteroid.Midpoint.X += Asteroid.X_Momentum;
-    //Asteroid.Midpoint.Y += Asteroid.Y_Momentum;
+    if (Asteroid)
+    {
+        Asteroid->Midpoint.X += Asteroid->X_Momentum;
+        Asteroid->Midpoint.Y += Asteroid->Y_Momentum;
+    }
 
-    //HandleObjectEdgeWarping(&Asteroid, OffscreenBuffer->Width, OffscreenBuffer->Height);
+    if (Asteroid) HandleObjectEdgeWarping(Asteroid, OffscreenBuffer->Width, OffscreenBuffer->Height);
     HandleObjectEdgeWarping(Player, OffscreenBuffer->Width, OffscreenBuffer->Height);
-    //SetObjectModelForDraw(&Asteroid);
-    SetObjectModelForDraw(GameState->Player);
-    //DrawObjectModelInBuffer(OffscreenBuffer, &Asteroid);
+    if (Asteroid) SetObjectModelForDraw(Asteroid);
+    SetObjectModelForDraw(Player);
+    if (Asteroid) DrawObjectModelInBuffer(OffscreenBuffer, Asteroid);
     DrawObjectModelInBuffer(OffscreenBuffer, Player);
 }

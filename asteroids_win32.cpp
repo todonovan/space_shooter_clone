@@ -233,13 +233,11 @@ LRESULT CALLBACK AsteroidsWindowCallback(HWND WindHandle,
 			int Height = PaintStruct.rcPaint.bottom - PaintStruct.rcPaint.top;
 			DrawToWindow(PaintDC);
 			EndPaint(WindHandle, &PaintStruct);
-			return 0;
-        }
+        } break;
         case WM_CLOSE: case WM_DESTROY:
         {
             PostQuitMessage(0);
-            return 0;
-        }
+        } break;
         case WM_KEYDOWN:
         {
             switch (wParam)
@@ -247,19 +245,17 @@ LRESULT CALLBACK AsteroidsWindowCallback(HWND WindHandle,
                 case VK_UP:
                 {
                     OutputDebugString("Up arrow");
-                    return 0;
-                }
+                } break;
                 default:
                 {
                     OutputDebugString("Other key");
-                    return 0;
-                }
+                } break;
             }
-        }
+        } break;
         default:
         {
             Result = DefWindowProc(WindHandle, Message, wParam, lParam);
-        }
+        } break;
     }
 
     return Result;
