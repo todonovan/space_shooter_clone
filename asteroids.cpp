@@ -255,51 +255,58 @@ void SetVertValue(vert_set *VertSet, uint32_t VertIndex, float XVal, float YVal)
 
 void SpawnAsteroid(game_state *GameState, memory_segment *MemorySegment, object_type AsteroidType, float X_Spawn, float Y_Spawn, float X_Mo, float Y_Mo, float AngularMomentum)
 {
-    game_object *NewAsteroid = &GameState->SpawnedAsteroids->Asteroids[GameState->NumSpawnedAsteroids];
-    NewAsteroid->Type = AsteroidType;
-    NewAsteroid->Model = PushToMemorySegment(MemorySegment, object_model);
-    object_model *Model = NewAsteroid->Model;
-    if (Model)
+    if (GameState->NumSpawnedAsteroids < MAX_NUM_SPAWNED_ASTEROIDS)
     {
-        // Yes, as currently coded, this could easily be replaced by a look up table. But, I am assuming that
-        // in the future, the spawn code will be slightly different in other ways for the different asteroid types.
-        switch (NewAsteroid->Type)
+        game_object *NewAsteroid = &GameState->SpawnedAsteroids->Asteroids[GameState->NumSpawnedAsteroids];
+        NewAsteroid->Type = AsteroidType;
+        NewAsteroid->Model = PushToMemorySegment(MemorySegment, object_model);
+        object_model *Model = NewAsteroid->Model;
+        if (Model)
         {
-            case ASTEROID_LARGE:
+            // Yes, as currently coded, this could easily be replaced by a look up table. But, I am assuming that
+            // in the future, the spawn code will be slightly different in other ways for the different asteroid types.
+            switch (NewAsteroid->Type)
             {
-                Model->NumVertices = ASTEROID_LARGE_NUM_VERTICES;
-            } break;
-            case ASTEROID_MEDIUM:
-            {
-                Model->NumVertices = ASTEROID_MEDIUM_NUM_VERTICES;
-            } break;
-            case ASTEROID_SMALL:
-            {
-                Model->NumVertices = ASTEROID_SMALL_NUM_VERTICES;
-            } break;
-        }
+                case ASTEROID_LARGE:
+                {
+                    Model->NumVertices = ASTEROID_LARGE_NUM_VERTICES;
+                } break;
+                case ASTEROID_MEDIUM:
+                {
+                    Model->NumVertices = ASTEROID_MEDIUM_NUM_VERTICES;
+                } break;
+                case ASTEROID_SMALL:
+                {
+                    Model->NumVertices = ASTEROID_SMALL_NUM_VERTICES;
+                } break;
+            }
 
-        Model->StartVerts = PushToMemorySegment(MemorySegment, vert_set);
-        Model->StartVerts->Verts = PushArrayToMemorySegment(MemorySegment, Model->NumVertices, vec_2);
-        Model->DrawVerts = PushToMemorySegment(MemorySegment, vert_set);
-        Model->DrawVerts->Verts = PushArrayToMemorySegment(MemorySegment, Model->NumVertices, vec_2);
-        Model->Color.Red = ASTEROID_RED;
-        Model->Color.Blue = ASTEROID_BLUE;
-        Model->Color.Green = ASTEROID_GREEN;
-        Model->LineWidth = ASTEROID_LINE_WIDTH;
-        NewAsteroid->Midpoint.X = X_Spawn;
-        NewAsteroid->Midpoint.Y = Y_Spawn;
-        NewAsteroid->X_Momentum = X_Mo;
-        NewAsteroid->Y_Momentum = Y_Mo;
-        NewAsteroid->OffsetAngle = 0.0f;
-        NewAsteroid->AngularMomentum = AngularMomentum;
-        NewAsteroid->IsVisible = true;
+            Model->StartVerts = PushToMemorySegment(MemorySegment, vert_set);
+            Model->StartVerts->Verts = PushArrayToMemorySegment(MemorySegment, Model->NumVertices, vec_2);
+            Model->DrawVerts = PushToMemorySegment(MemorySegment, vert_set);
+            Model->DrawVerts->Verts = PushArrayToMemorySegment(MemorySegment, Model->NumVertices, vec_2);
+            Model->Color.Red = ASTEROID_RED;
+            Model->Color.Blue = ASTEROID_BLUE;
+            Model->Color.Green = ASTEROID_GREEN;
+            Model->LineWidth = ASTEROID_LINE_WIDTH;
+            NewAsteroid->Midpoint.X = X_Spawn;
+            NewAsteroid->Midpoint.Y = Y_Spawn;
+            NewAsteroid->X_Momentum = X_Mo;
+            NewAsteroid->Y_Momentum = Y_Mo;
+            NewAsteroid->OffsetAngle = 0.0f;
+            NewAsteroid->AngularMomentum = AngularMomentum;
+            NewAsteroid->IsVisible = true;
+        }
+        else
+        {
+            // Out of memory; handle error -- logging? etc?
+        }
+        GameState->NumSpawnedAsteroids += 1;
     }
     else
     {
-        // Out of memory; handle error -- logging? etc?
+        // Out of space to store asteroids; handle here?
     }
-    GameState->NumSpawnedAsteroids += 1;
 }
 
 void HandleSceneEdgeWarping(game_state *GameState, int Width, int Height)
