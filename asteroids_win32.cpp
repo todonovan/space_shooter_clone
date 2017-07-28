@@ -209,6 +209,11 @@ void FillSoundBuffer(DWORD ByteToLock, DWORD BytesToWrite)
     }
 }
 
+void ReadResourceFile(char *FileName, void *Buffer)
+{
+    
+}
+
 /* The main callback for our window. This function will handle all
    messages passed from Windows. The default case must be maintained
    to ensure that messages not explicitly handled are handled by Windows. */

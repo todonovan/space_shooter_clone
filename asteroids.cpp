@@ -67,12 +67,13 @@ struct game_state
 
 struct loaded_resource_memory
 {
-    memory_segment Segment;
-    uint32_t Test;
+    memory_segment ResourceMemorySegment;
+    void *Storage;
 };
 
 struct game_permanent_memory
 {
+    memory_segment PermMemSegment;
     game_state *GameState;
     loaded_resource_memory *Resources;
 };
@@ -339,14 +340,21 @@ void DrawSceneModelsIntoBuffer(platform_bitmap_buffer *Buffer, game_state *GameS
 
 void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenBuffer, platform_sound_buffer *SoundBuffer, platform_player_input *PlayerInput)
 {
-    game_state *GameState = (game_state *)Memory->PermanentStorage;
+    game_permanent_memory *GamePermMemory = (game_permanent_memory *)Memory->PermanentStorage;
     if (!Memory->IsInitialized)
     {
         // Set up game memory here!
+        int perm_storage_struct_size = sizeof(memory_segment) + sizeof(game_state) + sizeof(loaded_resource_memory);
 
-        BeginMemorySegment(&GameState->SceneMemorySegment, (Memory->PermanentStorageSize - sizeof(game_state)) / 2,
-                        (uint8_t *)Memory->PermanentStorage + sizeof(game_state));
+        BeginMemorySegment(&GamePermMemory->PermMemSegment, perm_storage_struct_size,
+                            (uint8_t *)Memory->PermanentStorage + sizeof(game_permanent_memory));
 
+        GamePermMemory->GameState = PushToMemorySegment(&GamePermMemory->PermMemSegment, game_state);
+        GamePermMemory->Resources = PushToMemorySegment(&GamePermMemory->PermMemSegment, loaded_resource_memory);
+
+        game_state *GameState = GamePermMemory->GameState;
+        BeginMemorySegment(&GameState->SceneMemorySegment, (Memory->PermanentStorageSize - perm_storage_struct_size) / 2,
+                            (uint8_t *)Memory->PermanentStorage + sizeof(game_permanent_memory) + perm_storage_struct_size);
 
         GameState->Player = PushToMemorySegment(&GameState->SceneMemorySegment, game_object);
         GameState->Player->Type = PLAYER;
@@ -382,9 +390,16 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
         GameState->SpawnedAsteroids = PushToMemorySegment(&GameState->SceneMemorySegment, asteroid_set);
         GameState->SpawnedAsteroids->Asteroids = PushArrayToMemorySegment(&GameState->SceneMemorySegment, MAX_NUM_SPAWNED_ASTEROIDS, game_object);
 
+        loaded_resource_memory *ResourceMemory = GamePermMemory->Resources;
+        BeginMemorySegment(&ResourceMemory->ResourceMemorySegment, (Memory->PermanentStorageSize - perm_storage_struct_size) / 2,
+                            (uint8_t *)Memory->PermanentStorage + sizeof(game_permanent_memory) + perm_storage_struct_size + ((Memory->PermanentStorageSize - perm_storage_struct_size) / 2));
+
+        
         Memory->IsInitialized = true;
     }
 
+    game_state *GameState = GamePermMemory->GameState;
+    loaded_resource_memory *LoadedResources = GamePermMemory->Resources;
     game_object *Player = GameState->Player;
     object_model *PlayerModel = Player->Model;
 
