@@ -3,7 +3,7 @@
 
 // Macros
 
-#define HackyAssert(Expr) if !((Expr)) { (uint8_t *)0 = 0;}
+#define HackyAssert(Expr) if(!(Expr)) { *(uint8_t *)0 = 0;}
 
 #define Kilobytes(Num) ((Num) * 1024)
 #define Megabytes(Num) ((Num) * 1024 * 1024)
@@ -17,9 +17,9 @@
 #define PLAYER_BLUE 200
 #define PLAYER_GREEN 200
 
-#define ASTEROID_LARGE_NUM_VERTICES 8
-#define ASTEROID_MEDIUM_NUM_VERTICES 6
-#define ASTEROID_SMALL_NUM_VERTICES 4
+#define LARGE_ASTEROID_NUM_VERTICES 8
+#define MEDIUM_ASTEROID_NUM_VERTICES 6
+#define SMALL_ASTEROID_NUM_VERTICES 4
 
 #define ASTEROID_LINE_WIDTH 1.5f
 #define ASTEROID_RED 125
@@ -89,6 +89,7 @@ struct memory_segment
     uint32_t Used;
 };
 
+bool ReadFileIntoBuffer(LPCTSTR FileName, void *Buffer, DWORD SizeToRead);
 void UpdateGameAndRender(game_memory *, platform_bitmap_buffer *, platform_sound_buffer *, platform_player_input *);
 
 #endif /* PLATFORM_H */

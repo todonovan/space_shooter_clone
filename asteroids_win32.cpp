@@ -4,6 +4,7 @@
 #include <math.h>
 #include <xinput.h>
 #include <dsound.h>
+#include <tchar.h>
 
 #include "platform.h"
 
@@ -209,9 +210,39 @@ void FillSoundBuffer(DWORD ByteToLock, DWORD BytesToWrite)
     }
 }
 
-void ReadResourceFile(char *FileName, void *Buffer)
+// Returns true if read was successful, false otherwise
+bool ReadFileIntoBuffer(LPCTSTR FileName, void *Buffer, DWORD BytesToRead)
 {
-    
+    DWORD NumBytesRead = 0;
+    HANDLE File = CreateFileA(FileName, GENERIC_READ, 0, 0, OPEN_EXISTING, 0, 0);
+    if (ReadFile(File, Buffer, BytesToRead, &NumBytesRead, 0))
+    {
+        CloseHandle(File);
+        return NumBytesRead == BytesToRead;
+    }
+    else
+    {
+        CloseHandle(File);
+        return false;
+    }
+}
+
+// Returns true if the write was successful, false otherwise
+// Note that calling this function will truncate the associated file
+bool WriteBufferIntoFile(LPCTSTR FileName, void *Buffer, DWORD BytesToWrite)
+{
+    DWORD NumBytesWritten = 0;
+    HANDLE File = CreateFileA(FileName, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
+    if (WriteFile(File, Buffer, BytesToWrite, &NumBytesWritten, 0))
+    {
+        CloseHandle(File);
+        return NumBytesWritten == BytesToWrite;
+    }
+    else
+    {
+        CloseHandle(File);
+        return false;
+    }
 }
 
 /* The main callback for our window. This function will handle all

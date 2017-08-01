@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <math.h>
 #include <xinput.h>
+#include <stdlib.h>
 
 #include "platform.h"
 
@@ -32,7 +33,7 @@ typedef enum object_type {
 
 struct object_model
 {
-    int NumVertices;
+    uint32_t NumVertices;
     vert_set *StartVerts;
     vert_set *DrawVerts;
     color_triple Color;
@@ -68,7 +69,10 @@ struct game_state
 struct loaded_resource_memory
 {
     memory_segment ResourceMemorySegment;
-    void *Storage;
+    vec_2 *PlayerVertices;
+    vec_2 *SmallAsteroidVertices;
+    vec_2 *MediumAsteroidVertices;
+    vec_2 *LargeAsteroidVertices;
 };
 
 struct game_permanent_memory
@@ -152,7 +156,7 @@ void SetObjectModelForDraw(game_object *Object)
     vec_2 *StartVerts = Model->StartVerts->Verts;
     vec_2 *DrawVerts = Model->DrawVerts->Verts;
 
-    for (int i = 0; i < Model->NumVertices; ++i)
+    for (uint32_t i = 0; i < Model->NumVertices; ++i)
     {
         float X_Orig = StartVerts[i].X;
         float Y_Orig = StartVerts[i].Y;
@@ -215,7 +219,7 @@ void DrawObjectModelIntoBuffer(platform_bitmap_buffer *Buffer, game_object *Obje
     object_model *Model = Object->Model;
     vert_set *DrawVerts = Model->DrawVerts;
 
-    for (int i = 0; i < Model->NumVertices - 1; ++i)
+    for (uint32_t i = 0; i < Model->NumVertices - 1; ++i)
     {
         Cur.X = DrawVerts->Verts[cur].X + Object->Midpoint.X;
         Cur.Y = DrawVerts->Verts[cur].Y + Object->Midpoint.Y;
@@ -254,7 +258,7 @@ void SetVertValue(vert_set *VertSet, uint32_t VertIndex, float XVal, float YVal)
     VertSet->Verts[VertIndex].Y = YVal;
 }
 
-void SpawnAsteroid(game_state *GameState, memory_segment *MemorySegment, object_type AsteroidType, float X_Spawn, float Y_Spawn, float X_Mo, float Y_Mo, float AngularMomentum)
+void SpawnAsteroid(game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, object_type AsteroidType, float X_Spawn, float Y_Spawn, float X_Mo, float Y_Mo, float AngularMomentum)
 {
     if (GameState->NumSpawnedAsteroids < MAX_NUM_SPAWNED_ASTEROIDS)
     {
@@ -262,23 +266,25 @@ void SpawnAsteroid(game_state *GameState, memory_segment *MemorySegment, object_
         NewAsteroid->Type = AsteroidType;
         NewAsteroid->Model = PushToMemorySegment(MemorySegment, object_model);
         object_model *Model = NewAsteroid->Model;
+        vec_2 *ResourceVertices = 0;
         if (Model)
         {
-            // Yes, as currently coded, this could easily be replaced by a look up table. But, I am assuming that
-            // in the future, the spawn code will be slightly different in other ways for the different asteroid types.
             switch (NewAsteroid->Type)
             {
                 case ASTEROID_LARGE:
                 {
-                    Model->NumVertices = ASTEROID_LARGE_NUM_VERTICES;
+                    Model->NumVertices = LARGE_ASTEROID_NUM_VERTICES;
+                    ResourceVertices = Resources->LargeAsteroidVertices;
                 } break;
                 case ASTEROID_MEDIUM:
                 {
-                    Model->NumVertices = ASTEROID_MEDIUM_NUM_VERTICES;
+                    Model->NumVertices = MEDIUM_ASTEROID_NUM_VERTICES;
+                    ResourceVertices = Resources->MediumAsteroidVertices;
                 } break;
                 case ASTEROID_SMALL:
                 {
-                    Model->NumVertices = ASTEROID_SMALL_NUM_VERTICES;
+                    Model->NumVertices = SMALL_ASTEROID_NUM_VERTICES;
+                    ResourceVertices = Resources->SmallAsteroidVertices;
                 } break;
             }
 
@@ -286,6 +292,7 @@ void SpawnAsteroid(game_state *GameState, memory_segment *MemorySegment, object_
             Model->StartVerts->Verts = PushArrayToMemorySegment(MemorySegment, Model->NumVertices, vec_2);
             Model->DrawVerts = PushToMemorySegment(MemorySegment, vert_set);
             Model->DrawVerts->Verts = PushArrayToMemorySegment(MemorySegment, Model->NumVertices, vec_2);
+            GameState->NumSpawnedAsteroids += 1;
             Model->Color.Red = ASTEROID_RED;
             Model->Color.Blue = ASTEROID_BLUE;
             Model->Color.Green = ASTEROID_GREEN;
@@ -297,12 +304,12 @@ void SpawnAsteroid(game_state *GameState, memory_segment *MemorySegment, object_
             NewAsteroid->OffsetAngle = 0.0f;
             NewAsteroid->AngularMomentum = AngularMomentum;
             NewAsteroid->IsVisible = true;
+            vert_set *Verts = GameState->SpawnedAsteroids->Asteroids[GameState->NumSpawnedAsteroids - 1].Model->StartVerts;
+            for (uint32_t i = 0; i < NewAsteroid->Model->NumVertices; ++i)
+            {
+                SetVertValue(Verts, i, ResourceVertices[i].X, ResourceVertices[i].Y);
+            }
         }
-        else
-        {
-            // Out of memory; handle error -- logging? etc?
-        }
-        GameState->NumSpawnedAsteroids += 1;
     }
     else
     {
@@ -338,64 +345,111 @@ void DrawSceneModelsIntoBuffer(platform_bitmap_buffer *Buffer, game_state *GameS
     }
 }
 
+void InitializePlayer(memory_segment *MemSegment, game_state *GameState, loaded_resource_memory *Resources, float X_Coord, float Y_Coord)
+{
+    GameState->Player = PushToMemorySegment(&GameState->SceneMemorySegment, game_object);
+    game_object *Player = GameState->Player;
+    Player->Type = PLAYER;
+    Player->Midpoint.X = X_Coord;
+    Player->Midpoint.Y = Y_Coord;
+
+    Player->Model = PushToMemorySegment(&GameState->SceneMemorySegment, object_model);
+    object_model *P_Model = Player->Model;
+    P_Model->NumVertices = PLAYER_NUM_VERTICES;
+    P_Model->StartVerts = PushToMemorySegment(&GameState->SceneMemorySegment, vert_set);
+    P_Model->StartVerts->Verts = PushArrayToMemorySegment(&GameState->SceneMemorySegment, PLAYER_NUM_VERTICES, vec_2);
+
+    P_Model->DrawVerts = PushToMemorySegment(&GameState->SceneMemorySegment, vert_set);
+    P_Model->DrawVerts->Verts = PushArrayToMemorySegment(&GameState->SceneMemorySegment, PLAYER_NUM_VERTICES, vec_2);
+
+    // NOTE! These values will need to be stored in a 'resource' file -- a config text file, whatever.
+    for (uint32_t i = 0; i < PLAYER_NUM_VERTICES; ++i)
+    {
+        SetVertValue(GameState->Player->Model->StartVerts, i, Resources->PlayerVertices[i].X, Resources->PlayerVertices[i].Y);
+    }
+
+    P_Model->LineWidth = PLAYER_LINE_WIDTH;
+
+    P_Model->Color.Red = 100, P_Model->Color.Blue = 100, P_Model->Color.Green = 100;
+    Player->X_Momentum = 0.0f, Player->Y_Momentum = 0.0f;
+    Player->OffsetAngle = 0.0f;
+    Player->AngularMomentum = 0.1f;
+    Player->MaxMomentum = 30.0f;
+    Player->IsVisible = true;
+}
+
+void LoadResources(loaded_resource_memory *ResourceMemory)
+{
+    ResourceMemory->PlayerVertices = PushArrayToMemorySegment(&ResourceMemory->ResourceMemorySegment, PLAYER_NUM_VERTICES, vec_2);
+    ResourceMemory->SmallAsteroidVertices = PushArrayToMemorySegment(&ResourceMemory->ResourceMemorySegment, SMALL_ASTEROID_NUM_VERTICES, vec_2);
+    ResourceMemory->MediumAsteroidVertices = PushArrayToMemorySegment(&ResourceMemory->ResourceMemorySegment, MEDIUM_ASTEROID_NUM_VERTICES, vec_2);
+    ResourceMemory->LargeAsteroidVertices = PushArrayToMemorySegment(&ResourceMemory->ResourceMemorySegment, LARGE_ASTEROID_NUM_VERTICES, vec_2);
+
+    // Player
+    DWORD SizeToRead = (DWORD)(sizeof(vec_2) * PLAYER_NUM_VERTICES);
+    if (!ReadFileIntoBuffer("C:/Asteroids/build/Debug/player_vertices.dat", (void *)ResourceMemory->PlayerVertices, SizeToRead))
+    {
+        HackyAssert(false);
+    }
+
+    // Small
+    SizeToRead = (DWORD)(sizeof(vec_2) * SMALL_ASTEROID_NUM_VERTICES);
+    if (!ReadFileIntoBuffer("C:/Asteroids/build/Debug/sm_ast_vertices.dat", (void *)ResourceMemory->SmallAsteroidVertices, SizeToRead))
+    {
+        HackyAssert(false);
+    }
+    
+    // Medium    
+    SizeToRead = (DWORD)(sizeof(vec_2) * MEDIUM_ASTEROID_NUM_VERTICES);
+    if (!ReadFileIntoBuffer("C:/Asteroids/build/Debug/med_ast_vertices.dat", (void *)ResourceMemory->MediumAsteroidVertices, SizeToRead))
+    {
+        HackyAssert(false);
+    }
+
+    // Large
+    SizeToRead = (DWORD)(sizeof(vec_2) * LARGE_ASTEROID_NUM_VERTICES);
+    if (!ReadFileIntoBuffer("C:/Asteroids/build/Debug/lg_ast_vertices.dat", (void *)ResourceMemory->LargeAsteroidVertices, SizeToRead))
+    {
+        HackyAssert(false);
+    }
+}
+
+void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *GamePermMemory, int BufferWidth, int BufferHeight)
+{
+    int perm_storage_struct_size = sizeof(memory_segment) + sizeof(game_state) + sizeof(loaded_resource_memory);
+
+    BeginMemorySegment(&GamePermMemory->PermMemSegment, perm_storage_struct_size,
+                        (uint8_t *)Memory->PermanentStorage + sizeof(game_permanent_memory));
+
+    GamePermMemory->GameState = PushToMemorySegment(&GamePermMemory->PermMemSegment, game_state);
+    GamePermMemory->Resources = PushToMemorySegment(&GamePermMemory->PermMemSegment, loaded_resource_memory);
+
+    game_state *GameState = GamePermMemory->GameState;
+    BeginMemorySegment(&GameState->SceneMemorySegment, (Memory->PermanentStorageSize - perm_storage_struct_size) / 2,
+                        (uint8_t *)Memory->PermanentStorage + sizeof(game_permanent_memory) + perm_storage_struct_size);
+
+    GameState->NumSpawnedAsteroids = 0;
+    GameState->SpawnedAsteroids = PushToMemorySegment(&GameState->SceneMemorySegment, asteroid_set);
+    GameState->SpawnedAsteroids->Asteroids = PushArrayToMemorySegment(&GameState->SceneMemorySegment, MAX_NUM_SPAWNED_ASTEROIDS, game_object);
+
+    loaded_resource_memory *ResourceMemory = GamePermMemory->Resources;
+    BeginMemorySegment(&ResourceMemory->ResourceMemorySegment, (Memory->PermanentStorageSize - perm_storage_struct_size) / 2,
+                        (uint8_t *)Memory->PermanentStorage + sizeof(game_permanent_memory) + perm_storage_struct_size + ((Memory->PermanentStorageSize - perm_storage_struct_size) / 2));
+    LoadResources(ResourceMemory);
+    
+    InitializePlayer(&GameState->SceneMemorySegment, GameState, ResourceMemory, (float)(BufferWidth / 2), (float)(BufferHeight / 10));
+    
+    Memory->IsInitialized = true;
+}
+
 void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenBuffer, platform_sound_buffer *SoundBuffer, platform_player_input *PlayerInput)
 {
+    static int delay_handler = 0;
     game_permanent_memory *GamePermMemory = (game_permanent_memory *)Memory->PermanentStorage;
     if (!Memory->IsInitialized)
     {
-        // Set up game memory here!
-        int perm_storage_struct_size = sizeof(memory_segment) + sizeof(game_state) + sizeof(loaded_resource_memory);
-
-        BeginMemorySegment(&GamePermMemory->PermMemSegment, perm_storage_struct_size,
-                            (uint8_t *)Memory->PermanentStorage + sizeof(game_permanent_memory));
-
-        GamePermMemory->GameState = PushToMemorySegment(&GamePermMemory->PermMemSegment, game_state);
-        GamePermMemory->Resources = PushToMemorySegment(&GamePermMemory->PermMemSegment, loaded_resource_memory);
-
-        game_state *GameState = GamePermMemory->GameState;
-        BeginMemorySegment(&GameState->SceneMemorySegment, (Memory->PermanentStorageSize - perm_storage_struct_size) / 2,
-                            (uint8_t *)Memory->PermanentStorage + sizeof(game_permanent_memory) + perm_storage_struct_size);
-
-        GameState->Player = PushToMemorySegment(&GameState->SceneMemorySegment, game_object);
-        GameState->Player->Type = PLAYER;
-        game_object *Player = GameState->Player;
-        Player->Midpoint.X = (float)(OffscreenBuffer->Width / 2);
-        Player->Midpoint.Y = (float)(OffscreenBuffer->Height / 10);
-
-        Player->Model = PushToMemorySegment(&GameState->SceneMemorySegment, object_model);
-        object_model *P_Model = Player->Model;
-        P_Model->NumVertices = PLAYER_NUM_VERTICES;
-        P_Model->StartVerts = PushToMemorySegment(&GameState->SceneMemorySegment, vert_set);
-        P_Model->StartVerts->Verts = PushArrayToMemorySegment(&GameState->SceneMemorySegment, PLAYER_NUM_VERTICES, vec_2);
-
-		P_Model->DrawVerts = PushToMemorySegment(&GameState->SceneMemorySegment, vert_set);
-        P_Model->DrawVerts->Verts = PushArrayToMemorySegment(&GameState->SceneMemorySegment, PLAYER_NUM_VERTICES, vec_2);
-
-        // NOTE! These values will need to be stored in a 'resource' file -- a config text file, whatever.
-        SetVertValue(GameState->Player->Model->StartVerts, 0, -20.0f, -20.0f);
-        SetVertValue(GameState->Player->Model->StartVerts, 1, 0.0f, 40.0f);
-        SetVertValue(GameState->Player->Model->StartVerts, 2, 20.0f, -20.0f);
-        SetVertValue(GameState->Player->Model->StartVerts, 3, 0.0f, 0.0f);
-
-        P_Model->LineWidth = PLAYER_LINE_WIDTH;
-
-		P_Model->Color.Red = 100, P_Model->Color.Blue = 100, P_Model->Color.Green = 100;
-        Player->X_Momentum = 0.0f, Player->Y_Momentum = 0.0f;
-        Player->OffsetAngle = 0.0f;
-        Player->AngularMomentum = 0.1f;
-        Player->MaxMomentum = 30.0f;
-        Player->IsVisible = true;
-
-        GameState->NumSpawnedAsteroids = 0;
-        GameState->SpawnedAsteroids = PushToMemorySegment(&GameState->SceneMemorySegment, asteroid_set);
-        GameState->SpawnedAsteroids->Asteroids = PushArrayToMemorySegment(&GameState->SceneMemorySegment, MAX_NUM_SPAWNED_ASTEROIDS, game_object);
-
-        loaded_resource_memory *ResourceMemory = GamePermMemory->Resources;
-        BeginMemorySegment(&ResourceMemory->ResourceMemorySegment, (Memory->PermanentStorageSize - perm_storage_struct_size) / 2,
-                            (uint8_t *)Memory->PermanentStorage + sizeof(game_permanent_memory) + perm_storage_struct_size + ((Memory->PermanentStorageSize - perm_storage_struct_size) / 2));
-
-        
-        Memory->IsInitialized = true;
+        srand(GetTickCount());
+        InitializeGamePermanentMemory(Memory, GamePermMemory, OffscreenBuffer->Width, OffscreenBuffer->Height);
     }
 
     game_state *GameState = GamePermMemory->GameState;
@@ -407,22 +461,33 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
     {
         PostQuitMessage(0);
     }
-    if (PlayerInput->A_Pressed)
+    if (PlayerInput->A_Pressed && delay_handler == 0)
     {
-        SpawnAsteroid(GameState, &GameState->SceneMemorySegment, ASTEROID_MEDIUM, (float)(OffscreenBuffer->Width / 10),
-                                            (float)((OffscreenBuffer->Height / 10) * 7), -.25f, -1.0f, .005f);
-        vert_set *A_S_Verts = GameState->SpawnedAsteroids->Asteroids[GameState->NumSpawnedAsteroids - 1].Model->StartVerts;
-        SetVertValue(A_S_Verts, 0, -80.0f, 0.0f);
-        SetVertValue(A_S_Verts, 1, -25.0f, 100.0f);
-        SetVertValue(A_S_Verts, 2, 30.0f, 85.0f);
-        SetVertValue(A_S_Verts, 3, 45.0f, 2.0f);
-        SetVertValue(A_S_Verts, 4, 20.0f, -35.0f);
-        SetVertValue(A_S_Verts, 5, -60.0f, -70.0f);
+        delay_handler = 15;
+        int astIndex = rand() % 3;
+        int X = rand() % OffscreenBuffer->Width;
+        int Y = rand() % OffscreenBuffer->Height;
+        switch (astIndex)
+        {
+            case 0:
+            {
+                SpawnAsteroid(GameState, &GameState->SceneMemorySegment, LoadedResources, ASTEROID_SMALL, (float)X, (float)Y, -.25f, -1.0f, .005f);
+            } break;
+            case 1:
+            {
+                SpawnAsteroid(GameState, &GameState->SceneMemorySegment, LoadedResources, ASTEROID_MEDIUM, (float)X, (float)Y, -.25f, -1.0f, .005f);   
+            } break;
+            case 2:
+            {
+                SpawnAsteroid(GameState, &GameState->SceneMemorySegment, LoadedResources, ASTEROID_LARGE, (float)X, (float)Y, -.25f, -1.0f, .005f);
+            } break;
+        }
     }
     if (PlayerInput->B_Pressed)
     {
         PlayerModel->Color.Red = 0, PlayerModel->Color.Blue = 200;
     }
+    if (delay_handler > 0) delay_handler -= 1;
 
     game_object *Asteroids = GameState->SpawnedAsteroids->Asteroids;
     Player->OffsetAngle += Player->AngularMomentum * (PlayerInput->LTrigger + PlayerInput->RTrigger);
