@@ -28,7 +28,8 @@ typedef enum object_type {
     PLAYER,
     ASTEROID_LARGE,
     ASTEROID_MEDIUM,
-    ASTEROID_SMALL
+    ASTEROID_SMALL,
+    LASER
 } object_type;
 
 struct object_model
@@ -58,12 +59,20 @@ struct asteroid_set
     game_object *Asteroids;
 };
 
+struct laser_set
+{
+    game_object *Lasers;
+    uint32_t *LifeTimers;
+};
+
 struct game_state
 {
     memory_segment SceneMemorySegment;
     game_object *Player;
     uint32_t NumSpawnedAsteroids;
     asteroid_set *SpawnedAsteroids;
+    uint32_t NumSpawnedLasers;
+    laser_set *SpawnedLasers;
 };
 
 struct loaded_resource_memory
@@ -73,6 +82,7 @@ struct loaded_resource_memory
     vec_2 *SmallAsteroidVertices;
     vec_2 *MediumAsteroidVertices;
     vec_2 *LargeAsteroidVertices;
+    vec_2 *LaserVertices;
 };
 
 struct game_permanent_memory
@@ -229,11 +239,14 @@ void DrawObjectModelIntoBuffer(platform_bitmap_buffer *Buffer, game_object *Obje
         ++cur;
         if (i < Model->NumVertices - 2) ++next;
     }
-    Cur.X = DrawVerts->Verts[cur].X + Object->Midpoint.X;
-    Cur.Y = DrawVerts->Verts[cur].Y + Object->Midpoint.Y;
-    Next.X = DrawVerts->Verts[0].X + Object->Midpoint.X;
-    Next.Y = DrawVerts->Verts[0].Y + Object->Midpoint.Y;
-    DrawLineWidth(Buffer, &Cur, &Next, &Model->Color, Model->LineWidth);
+    if (Object->Type != LASER)
+    {
+        Cur.X = DrawVerts->Verts[cur].X + Object->Midpoint.X;
+        Cur.Y = DrawVerts->Verts[cur].Y + Object->Midpoint.Y;
+        Next.X = DrawVerts->Verts[0].X + Object->Midpoint.X;
+        Next.Y = DrawVerts->Verts[0].Y + Object->Midpoint.Y;
+        DrawLineWidth(Buffer, &Cur, &Next, &Model->Color, Model->LineWidth);
+    }
 }
 
 void BeginMemorySegment(memory_segment *Segment, uint32_t Size, uint8_t *Storage)
@@ -294,8 +307,8 @@ void SpawnAsteroid(game_state *GameState, memory_segment *MemorySegment, loaded_
             Model->DrawVerts->Verts = PushArrayToMemorySegment(MemorySegment, Model->NumVertices, vec_2);
             GameState->NumSpawnedAsteroids += 1;
             Model->Color.Red = ASTEROID_RED;
-            Model->Color.Blue = ASTEROID_BLUE;
             Model->Color.Green = ASTEROID_GREEN;
+            Model->Color.Blue = ASTEROID_BLUE;
             Model->LineWidth = ASTEROID_LINE_WIDTH;
             NewAsteroid->Midpoint.X = X_Spawn;
             NewAsteroid->Midpoint.Y = Y_Spawn;
@@ -317,12 +330,81 @@ void SpawnAsteroid(game_state *GameState, memory_segment *MemorySegment, loaded_
     }
 }
 
+void SpawnLaser(game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, game_object *Player)
+{
+    if (GameState->NumSpawnedLasers < MAX_NUM_SPAWNED_LASERS)
+    {
+        game_object *NewLaser = &GameState->SpawnedLasers->Lasers[GameState->NumSpawnedLasers];
+        NewLaser->Type = LASER;
+        NewLaser->Model = PushToMemorySegment(MemorySegment, object_model);
+        object_model *Model = NewLaser->Model;
+        vec_2 *ResourceVertices = Resources->LaserVertices;
+        if (Model)
+        {
+            Model->NumVertices = LASER_NUM_VERTICES;
+            Model->StartVerts = PushToMemorySegment(MemorySegment, vert_set);
+            Model->StartVerts->Verts = PushArrayToMemorySegment(MemorySegment, Model->NumVertices, vec_2);
+            Model->DrawVerts = PushToMemorySegment(MemorySegment, vert_set);
+            Model->DrawVerts->Verts = PushArrayToMemorySegment(MemorySegment, Model->NumVertices, vec_2);
+            GameState->NumSpawnedLasers += 1;
+            Model->Color.Red = LASER_RED;
+            Model->Color.Green = LASER_GREEN;
+            Model->Color.Blue = LASER_BLUE;
+            Model->LineWidth = LASER_LINE_WIDTH;
+
+            float mag = LASER_SPEED_MAG;
+            float theta = Player->OffsetAngle;
+            NewLaser->OffsetAngle = theta;
+            NewLaser->X_Momentum = mag * cosf(theta + (3.14159f / 2.0f));
+            NewLaser->Y_Momentum = mag * sinf(theta + (3.14159f / 2.0f));
+            NewLaser->AngularMomentum = 0.0f;
+            NewLaser->IsVisible = true;
+
+            vert_set *Verts = Model->StartVerts;
+            for (uint32_t i = 0; i < Model->NumVertices; ++i)
+            {
+                SetVertValue(Verts, i, ResourceVertices[i].X, ResourceVertices[i].Y);
+            }
+
+            // Laser midpoint calculated by halving the laser model vector, then rotating that vector
+            // by the offset angle, then adding those values to the Player object's midpoint.
+            float X = 0.0f;
+            float Y = (Resources->LaserVertices[1].Y / 2.0f);
+            float X_Rot = (X * cosf(theta)) - (Y * sinf(theta));
+            float Y_Rot = (X * sinf(theta)) + (Y * cosf(theta));
+            NewLaser->Midpoint.X = Player->Midpoint.X + X_Rot;
+            NewLaser->Midpoint.Y = Player->Midpoint.Y + Y_Rot;
+
+            GameState->SpawnedLasers->LifeTimers[GameState->NumSpawnedLasers - 1] = 250;
+        }
+        else
+        {
+            // Error creating model; handle here
+        }
+    }
+    else
+    {
+        // Can't spawn more lasers; do any necessary handling here (sound effects, etc.)
+        // But likely none needed.
+    }
+}
+
+void DespawnLaser(game_state *GameState, uint32_t LaserIndex)
+{
+    GameState->SpawnedLasers[LaserIndex] = GameState->SpawnedLasers[GameState->NumSpawnedLasers - 1];
+    GameState->NumSpawnedLasers -= 1;
+}
+
 void HandleSceneEdgeWarping(game_state *GameState, int Width, int Height)
 {
     HandleObjectEdgeWarping(GameState->Player, Width, Height);
     for (uint32_t i = 0; i < GameState->NumSpawnedAsteroids; ++i)
     {
         HandleObjectEdgeWarping(&GameState->SpawnedAsteroids->Asteroids[i], Width, Height);
+    }
+    for (uint32_t i = 0; i < GameState->NumSpawnedLasers; ++i)
+    {
+        HandleObjectEdgeWarping(&GameState->SpawnedLasers->Lasers[i], Width, Height);
     }
 }
 
@@ -333,6 +415,10 @@ void SetSceneModelsForDraw(game_state *GameState)
     {
         SetObjectModelForDraw(&GameState->SpawnedAsteroids->Asteroids[i]);
     }
+    for (uint32_t i = 0; i < GameState->NumSpawnedLasers; ++i)
+    {
+        SetObjectModelForDraw(&GameState->SpawnedLasers->Lasers[i]);
+    }
 }
 
 void DrawSceneModelsIntoBuffer(platform_bitmap_buffer *Buffer, game_state *GameState)
@@ -342,6 +428,11 @@ void DrawSceneModelsIntoBuffer(platform_bitmap_buffer *Buffer, game_state *GameS
     {
         game_object Asteroid = GameState->SpawnedAsteroids->Asteroids[i];
         if (Asteroid.IsVisible) DrawObjectModelIntoBuffer(Buffer, &Asteroid);
+    }
+    for (uint32_t i = 0; i < GameState->NumSpawnedLasers; ++i)
+    {
+        game_object Laser = GameState->SpawnedLasers->Lasers[i];
+        if (Laser.IsVisible) DrawObjectModelIntoBuffer(Buffer, &Laser);
     }
 }
 
@@ -370,7 +461,9 @@ void InitializePlayer(memory_segment *MemSegment, game_state *GameState, loaded_
 
     P_Model->LineWidth = PLAYER_LINE_WIDTH;
 
-    P_Model->Color.Red = 100, P_Model->Color.Blue = 100, P_Model->Color.Green = 100;
+    P_Model->Color.Red = PLAYER_RED;
+    P_Model->Color.Green = PLAYER_GREEN;
+    P_Model->Color.Blue = PLAYER_BLUE;
     Player->X_Momentum = 0.0f, Player->Y_Momentum = 0.0f;
     Player->OffsetAngle = 0.0f;
     Player->AngularMomentum = 0.1f;
@@ -384,6 +477,7 @@ void LoadResources(loaded_resource_memory *ResourceMemory)
     ResourceMemory->SmallAsteroidVertices = PushArrayToMemorySegment(&ResourceMemory->ResourceMemorySegment, SMALL_ASTEROID_NUM_VERTICES, vec_2);
     ResourceMemory->MediumAsteroidVertices = PushArrayToMemorySegment(&ResourceMemory->ResourceMemorySegment, MEDIUM_ASTEROID_NUM_VERTICES, vec_2);
     ResourceMemory->LargeAsteroidVertices = PushArrayToMemorySegment(&ResourceMemory->ResourceMemorySegment, LARGE_ASTEROID_NUM_VERTICES, vec_2);
+    ResourceMemory->LaserVertices = PushArrayToMemorySegment(&ResourceMemory->ResourceMemorySegment, LASER_NUM_VERTICES, vec_2);
 
     // Player
     DWORD SizeToRead = (DWORD)(sizeof(vec_2) * PLAYER_NUM_VERTICES);
@@ -412,6 +506,13 @@ void LoadResources(loaded_resource_memory *ResourceMemory)
     {
         HackyAssert(false);
     }
+
+    // Laser
+    SizeToRead = (DWORD)(sizeof(vec_2) * LASER_NUM_VERTICES);
+    if (!ReadFileIntoBuffer("C:/Asteroids/build/Debug/laser_vertices.dat", (void *)ResourceMemory->LaserVertices, SizeToRead))
+    {
+        HackyAssert(false);
+    }
 }
 
 void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *GamePermMemory, int BufferWidth, int BufferHeight)
@@ -431,6 +532,14 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     GameState->NumSpawnedAsteroids = 0;
     GameState->SpawnedAsteroids = PushToMemorySegment(&GameState->SceneMemorySegment, asteroid_set);
     GameState->SpawnedAsteroids->Asteroids = PushArrayToMemorySegment(&GameState->SceneMemorySegment, MAX_NUM_SPAWNED_ASTEROIDS, game_object);
+    GameState->NumSpawnedLasers = 0;
+    GameState->SpawnedLasers = PushToMemorySegment(&GameState->SceneMemorySegment, laser_set);
+    GameState->SpawnedLasers->Lasers = PushArrayToMemorySegment(&GameState->SceneMemorySegment, MAX_NUM_SPAWNED_LASERS, game_object);
+    GameState->SpawnedLasers->LifeTimers = PushArrayToMemorySegment(&GameState->SceneMemorySegment, MAX_NUM_SPAWNED_LASERS, uint32_t);
+    for (uint32_t i = 0; i < MAX_NUM_SPAWNED_LASERS; ++i)
+    {
+        GameState->SpawnedLasers->LifeTimers[i] = 0;
+    }
 
     loaded_resource_memory *ResourceMemory = GamePermMemory->Resources;
     BeginMemorySegment(&ResourceMemory->ResourceMemorySegment, (Memory->PermanentStorageSize - perm_storage_struct_size) / 2,
@@ -444,7 +553,8 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
 
 void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenBuffer, platform_sound_buffer *SoundBuffer, platform_player_input *PlayerInput)
 {
-    static int delay_handler = 0;
+    static int hacky_delay_handler_1 = 0;
+    static int hacky_delay_handler_2 = 0;
     game_permanent_memory *GamePermMemory = (game_permanent_memory *)Memory->PermanentStorage;
     if (!Memory->IsInitialized)
     {
@@ -461,9 +571,9 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
     {
         PostQuitMessage(0);
     }
-    if (PlayerInput->A_Pressed && delay_handler == 0)
+    if (PlayerInput->A_Pressed && hacky_delay_handler_1 == 0)
     {
-        delay_handler = 15;
+        hacky_delay_handler_1 = 15;
         int astIndex = rand() % 3;
         int X = rand() % OffscreenBuffer->Width;
         int Y = rand() % OffscreenBuffer->Height;
@@ -483,11 +593,13 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
             } break;
         }
     }
-    if (PlayerInput->B_Pressed)
+    if (PlayerInput->B_Pressed && hacky_delay_handler_2 == 0)
     {
-        PlayerModel->Color.Red = 0, PlayerModel->Color.Blue = 200;
+        hacky_delay_handler_2 = 15;
+        SpawnLaser(GameState, &GameState->SceneMemorySegment, LoadedResources, Player);
     }
-    if (delay_handler > 0) delay_handler -= 1;
+    if (hacky_delay_handler_1 > 0) hacky_delay_handler_1 -= 1;
+    if (hacky_delay_handler_2 > 0) hacky_delay_handler_2 -= 1;
 
     game_object *Asteroids = GameState->SpawnedAsteroids->Asteroids;
     Player->OffsetAngle += Player->AngularMomentum * (PlayerInput->LTrigger + PlayerInput->RTrigger);
@@ -511,6 +623,27 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
     {
         Asteroids[i].Midpoint.X += Asteroids[i].X_Momentum;
         Asteroids[i].Midpoint.Y += Asteroids[i].Y_Momentum;        
+    }
+
+    for (uint32_t i = 0; i < GameState->NumSpawnedLasers; ++i)
+    {
+        if (GameState->SpawnedLasers->LifeTimers[i] > 0)
+        {
+            GameState->SpawnedLasers->Lasers[i].Midpoint.X += GameState->SpawnedLasers->Lasers[i].X_Momentum;
+            GameState->SpawnedLasers->Lasers[i].Midpoint.Y += GameState->SpawnedLasers->Lasers[i].Y_Momentum;
+            GameState->SpawnedLasers->LifeTimers[i] -= 1; 
+        }
+        else
+        {
+            GameState->SpawnedLasers->Lasers[i].IsVisible = false;
+        }
+    }
+    for (uint32_t i = 0; i < GameState->NumSpawnedLasers; ++i)
+    {
+        if (!GameState->SpawnedLasers->Lasers[i].IsVisible)
+        {
+            DespawnLaser(GameState, i);
+        }
     }
 
     HandleSceneEdgeWarping(GameState, OffscreenBuffer->Width, OffscreenBuffer->Height);
