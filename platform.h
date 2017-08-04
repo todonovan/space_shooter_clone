@@ -34,9 +34,9 @@
 #define LASER_GREEN 42
 #define LASER_BLUE 21
 
-#define MAX_NUM_SPAWNED_LASERS 3
+#define MAX_NUM_SPAWNED_LASERS 5
 
-#define LASER_SPEED_MAG 20.0f
+#define LASER_SPEED_MAG 25.0f
 
 // What structs do we need here?
 /*

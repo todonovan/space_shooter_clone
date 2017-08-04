@@ -360,7 +360,7 @@ void SpawnLaser(game_state *GameState, memory_segment *MemorySegment, loaded_res
     if (GameState->NumSpawnedLasers < GameState->MaxNumLasers)
     {
         uint32_t NewLaserIndex = 0;
-        while (GameState->LaserSet.Lasers[NewLaserIndex].IsVisible) NewLaserIndex++;
+        while (GameState->LaserSet->Lasers[NewLaserIndex].IsVisible) NewLaserIndex++;
 
         game_object *NewLaser = &GameState->LaserSet->Lasers[NewLaserIndex];
         NewLaser->Model = PushToMemorySegment(MemorySegment, object_model);
@@ -402,7 +402,7 @@ void SpawnLaser(game_state *GameState, memory_segment *MemorySegment, loaded_res
             NewLaser->Midpoint.X = Player->Midpoint.X + X_Rot;
             NewLaser->Midpoint.Y = Player->Midpoint.Y + Y_Rot;
 
-            GameState->LaserSet->LifeTimers[NewLaserIndex] = 150;
+            GameState->LaserSet->LifeTimers[NewLaserIndex] = 77; // enough to return to spawn position when going horizontally across the screen
         }
         else
         {
@@ -663,7 +663,7 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
             GameState->LaserSet->Lasers[i].Midpoint.Y += GameState->LaserSet->Lasers[i].Y_Momentum;
             GameState->LaserSet->LifeTimers[i] -= 1;
         }
-        else
+        else if (GameState->LaserSet->Lasers[i].IsVisible && GameState->LaserSet->LifeTimers[i] == 0)
         {
             DespawnLaser(GameState, i);
         }

@@ -380,7 +380,7 @@ int CALLBACK WinMain(HINSTANCE Instance,
 
             // Initial input retrieval.
             platform_player_input LastInput = {};
-            platform_player_input CurrentInput = GetPlayerInput(0);
+            platform_player_input CurrentInput = GetPlayerInput(0, &LastInput);
 
 
             /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
