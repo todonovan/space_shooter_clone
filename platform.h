@@ -77,7 +77,9 @@ struct platform_player_input
     float NormalizedLX;
     float NormalizedLY;
     bool A_Pressed;
+    bool A_Was_Pressed;
     bool B_Pressed;
+    bool B_Was_Pressed;
     float LTrigger;
     float RTrigger;
     bool Start_Pressed;

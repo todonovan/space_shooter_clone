@@ -69,7 +69,7 @@ void DrawToWindow(HDC DrawDC)
                   GlobalBackbuffer.Height, GlobalBackbuffer.Memory, &(GlobalBackbuffer.InfoStruct), DIB_RGB_COLORS, SRCCOPY);
 }
 
-platform_player_input GetPlayerInput(DWORD ControllerNumber)
+platform_player_input GetPlayerInput(DWORD ControllerNumber, platform_player_input *LastInputState)
 {
     XINPUT_STATE ControllerState;
     platform_player_input PlayerInput = {};
@@ -124,7 +124,9 @@ platform_player_input GetPlayerInput(DWORD ControllerNumber)
 		}
 
         PlayerInput.A_Pressed = (ControllerState.Gamepad.wButtons & XINPUT_GAMEPAD_A);
+        PlayerInput.A_Was_Pressed = LastInputState->A_Pressed;
         PlayerInput.B_Pressed = (ControllerState.Gamepad.wButtons & XINPUT_GAMEPAD_B);
+        PlayerInput.B_Was_Pressed = LastInputState->B_Pressed;
 		PlayerInput.LTrigger = normalizedLeftTrig * 1.25f;
 		PlayerInput.RTrigger = normalizedRightTrig * 1.25f;
         PlayerInput.Start_Pressed = (ControllerState.Gamepad.wButtons & XINPUT_GAMEPAD_START);
@@ -417,7 +419,7 @@ int CALLBACK WinMain(HINSTANCE Instance,
 
                 ClearOffscreenBuffer();
                 LastInput = CurrentInput;
-                CurrentInput = GetPlayerInput(0);
+                CurrentInput = GetPlayerInput(0, &LastInput);
                 UpdateGameAndRender(&GameMemory, &GlobalBackbuffer, &GlobalSoundBuffer, &CurrentInput);
                 HDC WindowDC = GetDC(WindowHandle);
                 DrawToWindow(WindowDC);
