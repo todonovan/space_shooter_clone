@@ -16,6 +16,8 @@
 #define PLAYER_RED 200
 #define PLAYER_GREEN 200
 #define PLAYER_BLUE 200
+#define PLAYER_ANGULAR_MOMENTUM 0.05f
+#define PLAYER_MAX_MOMENTUM 30.0f
 
 #define LARGE_ASTEROID_NUM_VERTICES 8
 #define MEDIUM_ASTEROID_NUM_VERTICES 6
@@ -38,15 +40,6 @@
 
 #define LASER_SPEED_MAG 25.0f
 
-// What structs do we need here?
-/*
-
-- Bitmap/buffer
-- Sound/buffer
-- Input handling
-- IO functions
-- Game window info? probably not
-*/
 
 struct platform_bitmap_buffer
 {

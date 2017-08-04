@@ -500,8 +500,8 @@ void InitializePlayer(memory_segment *MemSegment, game_state *GameState, loaded_
     P_Model->Color.Blue = PLAYER_BLUE;
     Player->X_Momentum = 0.0f, Player->Y_Momentum = 0.0f;
     Player->OffsetAngle = 0.0f;
-    Player->AngularMomentum = 0.1f;
-    Player->MaxMomentum = 30.0f;
+    Player->AngularMomentum = PLAYER_ANGULAR_MOMENTUM;
+    Player->MaxMomentum = PLAYER_MAX_MOMENTUM;
     Player->IsVisible = true;
 }
 
