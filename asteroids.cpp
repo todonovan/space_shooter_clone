@@ -77,6 +77,7 @@ struct game_object
     object_type Type;
     object_model *Model;
     vec_2 Midpoint;
+    float Radius;
     float X_Momentum;
     float Y_Momentum;
     float MaxMomentum;
@@ -297,11 +298,42 @@ void * AssignToMemorySegment_(memory_segment *Segment, uint32_t Size)
     return Result;
 }
 
+inline float CalculateVectorDistance(vec_2 P1, vec_2 P2)
+{
+    float d = sqrtf(((P2.X - P1.X) * (P2.X - P1.X)) + ((P2.Y - P1.Y) * (P2.Y - P1.Y)));
+    return d;
+}
+
+float CalculateObjectRadius(game_object *Object)
+{
+    object_model *Model = Object->Model;
+    vec_2 *Verts = Object->Model->StartVerts->Verts;
+    float cur_mag = 0.0f;
+    vec_2 Zero = {};
+    for (uint32_t i = 0; i < Model->NumVertices; ++i)
+    {
+        cur_mag += CalculateVectorDistance(Zero, Verts[i]);
+    }
+    return (cur_mag / (float)Model->NumVertices);
+}
+
 void SetVertValue(vert_set *VertSet, uint32_t VertIndex, float XVal, float YVal)
 {
     VertSet->Verts[VertIndex].X = XVal;
     VertSet->Verts[VertIndex].Y = YVal;
 }
+
+bool CheckIfCollision(vec_2 Obj1Mid, float Obj1Rad, vec_2 Obj2Mid, float Obj2Rad)
+{
+    return (CalculateVectorDistance(Obj1Mid, Obj2Mid)) < (Obj1Rad + Obj2Rad);
+}
+
+void TriggerEndGame()
+{
+    
+}
+
+
 
 void SpawnAsteroid(game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, object_type AsteroidType, float X_Spawn, float Y_Spawn, float X_Mo, float Y_Mo, float AngularMomentum)
 {
@@ -354,6 +386,7 @@ void SpawnAsteroid(game_state *GameState, memory_segment *MemorySegment, loaded_
             {
                 SetVertValue(Verts, i, ResourceVertices[i].X, ResourceVertices[i].Y);
             }
+            NewAsteroid->Radius = CalculateObjectRadius(NewAsteroid);
         }
     }
     else
@@ -375,6 +408,7 @@ void SpawnLaser(game_state *GameState, memory_segment *MemorySegment, loaded_res
         vec_2 *ResourceVertices = Resources->LaserVertices;
         if (Model)
         {
+            NewLaser->Type = LASER;
             Model->NumVertices = LASER_NUM_VERTICES;
             Model->StartVerts = PushToMemorySegment(MemorySegment, vert_set);
             Model->StartVerts->Verts = PushArrayToMemorySegment(MemorySegment, Model->NumVertices, vec_2);
@@ -408,6 +442,7 @@ void SpawnLaser(game_state *GameState, memory_segment *MemorySegment, loaded_res
             float Y_Rot = (X * sinf(theta)) + (Y * cosf(theta));
             NewLaser->Midpoint.X = Player->Midpoint.X + X_Rot;
             NewLaser->Midpoint.Y = Player->Midpoint.Y + Y_Rot;
+            NewLaser->Radius = CalculateObjectRadius(NewLaser);
 
             GameState->LaserSet->LifeTimers[NewLaserIndex] = 77; // enough to return to spawn position when going horizontally across the screen
         }
@@ -425,9 +460,54 @@ void SpawnLaser(game_state *GameState, memory_segment *MemorySegment, loaded_res
 
 void DespawnLaser(game_state *GameState, uint32_t LaserIndex)
 {
-    GameState->LaserSet->Lasers[LaserIndex].IsVisible = false;
+    GameState->LaserSet->Lasers[LaserIndex] = {};
     GameState->LaserSet->LifeTimers[LaserIndex] = 0;
     GameState->NumSpawnedLasers -= 1;
+}
+
+void HandleCollision(game_state *GameState, loaded_resource_memory *Resources, game_object *Obj1, game_object *Obj2, uint32_t LaserIndex = 0)
+{
+    switch(Obj1->Type)
+    {
+        case PLAYER:
+        {
+            if (Obj2->Type == LASER)
+            {
+                return;
+            }
+            else
+            {
+                Obj1->IsVisible = false;
+            }
+        } break;
+        case ASTEROID_SMALL:
+        case ASTEROID_MEDIUM:
+        case ASTEROID_LARGE:
+        {
+
+        } break;
+        case LASER:
+        {
+            if (Obj2->Type == ASTEROID_SMALL)
+            {
+				Obj2->IsVisible = false;
+            }
+            else if (Obj2->Type == ASTEROID_MEDIUM)
+            {
+                SpawnAsteroid(GameState, &GameState->SceneMemorySegment, Resources, ASTEROID_SMALL, Obj2->Midpoint.X + 40.0f, Obj2->Midpoint.Y + 40.0f, 2.0f * Obj2->X_Momentum, 2.0f * Obj2->Y_Momentum, 2.0f * Obj2->AngularMomentum);
+                SpawnAsteroid(GameState, &GameState->SceneMemorySegment, Resources, ASTEROID_SMALL, Obj2->Midpoint.X - 40.0f, Obj2->Midpoint.Y - 40.0f, -2.0f * Obj2->X_Momentum, -2.0f * Obj2->Y_Momentum, -2.0f * Obj2->AngularMomentum);
+				Obj2->IsVisible = false;;
+            }
+            else if (Obj2->Type == ASTEROID_LARGE)
+            {
+                SpawnAsteroid(GameState, &GameState->SceneMemorySegment, Resources, ASTEROID_MEDIUM, Obj2->Midpoint.X + 70.0f, Obj2->Midpoint.Y + 70.0f, 2.0f * Obj2->X_Momentum, 2.0f * Obj2->Y_Momentum, 2.0f * Obj2->AngularMomentum);
+                SpawnAsteroid(GameState, &GameState->SceneMemorySegment, Resources, ASTEROID_MEDIUM, Obj2->Midpoint.X - 70.0f, Obj2->Midpoint.Y - 70.0f, -2.0f * Obj2->X_Momentum, -2.0f * Obj2->Y_Momentum, -2.0f * Obj2->AngularMomentum);
+				Obj2->IsVisible = false;
+            }
+
+            DespawnLaser(GameState, LaserIndex);
+        } break;
+    }
 }
 
 void HandleSceneEdgeWarping(game_state *GameState, int Width, int Height)
@@ -510,6 +590,7 @@ void InitializePlayer(memory_segment *MemSegment, game_state *GameState, loaded_
     Player->AngularMomentum = PLAYER_ANGULAR_MOMENTUM;
     Player->MaxMomentum = PLAYER_MAX_MOMENTUM;
     Player->IsVisible = true;
+    Player->Radius = CalculateObjectRadius(Player);
 }
 
 void LoadResources(loaded_resource_memory *ResourceMemory)
@@ -653,8 +734,23 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
     Player->X_Momentum += (PlayerInput->NormalizedLX * PlayerInput->Magnitude * 0.8f);
     Player->Y_Momentum += (PlayerInput->NormalizedLY * PlayerInput->Magnitude * 0.8f);
 
-    Player->Midpoint.X += Player->X_Momentum;
-    Player->Midpoint.Y += Player->Y_Momentum;
+    vec_2 PlayerDesiredEnd = {};
+    PlayerDesiredEnd.X = Player->Midpoint.X + Player->X_Momentum;
+    PlayerDesiredEnd.Y = Player->Midpoint.Y + Player->Y_Momentum;
+
+    for (uint32_t i = 0; i < GameState->NumSpawnedAsteroids; ++i)
+    {
+        game_object *CurAsteroid = &GameState->SpawnedAsteroids->Asteroids[i];
+        bool collision = CheckIfCollision(PlayerDesiredEnd, Player->Radius, CurAsteroid->Midpoint, CurAsteroid->Radius);
+
+        if (collision)
+        {
+            HandleCollision(GameState, LoadedResources, Player, CurAsteroid);
+        }
+    }
+
+    Player->Midpoint.X = PlayerDesiredEnd.X;
+    Player->Midpoint.Y = PlayerDesiredEnd.Y;
 
     for (uint32_t i = 0; i < GameState->NumSpawnedAsteroids; ++i)
     {
@@ -673,6 +769,16 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
         else if (GameState->LaserSet->Lasers[i].IsVisible && GameState->LaserSet->LifeTimers[i] == 0)
         {
             DespawnLaser(GameState, i);
+        }
+
+        for (uint32_t a = 0; a < GameState->NumSpawnedAsteroids; ++a)
+        {
+            game_object *CurAsteroid = &GameState->SpawnedAsteroids->Asteroids[a];
+            bool collision = CheckIfCollision(GameState->LaserSet->Lasers[i].Midpoint, GameState->LaserSet->Lasers[i].Radius, CurAsteroid->Midpoint, CurAsteroid->Radius);
+            if (collision && CurAsteroid->IsVisible && GameState->LaserSet->Lasers[i].IsVisible)
+            {
+                HandleCollision(GameState, LoadedResources, &GameState->LaserSet->Lasers[i], CurAsteroid, i);
+            }
         }
     }
 
