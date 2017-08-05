@@ -36,6 +36,13 @@ struct vec_2
     float Y;
 };
 
+struct vec_3
+{
+    float X;
+    float Y;
+    float Z;
+};
+
 struct color_triple
 {
     uint8_t Red;
