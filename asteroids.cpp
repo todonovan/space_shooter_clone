@@ -743,7 +743,7 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
         game_object *CurAsteroid = &GameState->SpawnedAsteroids->Asteroids[i];
         bool collision = CheckIfCollision(PlayerDesiredEnd, Player->Radius, CurAsteroid->Midpoint, CurAsteroid->Radius);
 
-        if (collision)
+        if (collision && CurAsteroid->IsVisible)
         {
             HandleCollision(GameState, LoadedResources, Player, CurAsteroid);
         }
