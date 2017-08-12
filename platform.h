@@ -1,6 +1,8 @@
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
+#include <windows.h>
+
 // Macros
 
 #define HackyAssert(Expr) if(!(Expr)) { *(uint8_t *)0 = 0;}

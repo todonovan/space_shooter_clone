@@ -7,6 +7,11 @@
 #include <tchar.h>
 
 #include "platform.h"
+#include "asteroids.h"
+#include "collision.h"
+#include "game_entities.h"
+
+#include "asteroids.cpp"
 
 struct internal_game_window
 {
@@ -16,8 +21,6 @@ struct internal_game_window
     uint64_t Width;
     uint64_t Height;
 };
-
-#include "asteroids.cpp"
 
 static int64_t PerfCountFrequency;
 
