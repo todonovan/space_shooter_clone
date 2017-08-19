@@ -24,6 +24,12 @@ struct vert_set
     vec_2 *Verts;
 };
 
+struct draw_vertex
+{
+    bool PenDown;
+    vec_2 Vert;
+}
+
 typedef enum object_type {
     PLAYER,
     ASTEROID_LARGE,
@@ -98,5 +104,6 @@ struct game_permanent_memory
 #define PushToMemorySegment(Segment, type) (type *)AssignToMemorySegment_(Segment, sizeof(type))
 void * AssignToMemorySegment_(memory_segment *Segment, uint32_t Size);
 inline float CalculateVectorDistance(vec_2 P1, vec_2 P2);
+line_segment *MakeLineSegment(vec_2 S, vec_2 E);
 
 #endif // asteroids.h

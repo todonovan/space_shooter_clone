@@ -55,12 +55,12 @@ void SetPixelInBuffer(platform_bitmap_buffer *Buffer, vec_2 *Coords, color_tripl
 
 /// TODO!! This implementation of Bresenham, courtesy of the internet, is busted. Must find better line-drawing
 /// alg that handles width properly. All Bresenham implementations seem to be poorly suited to width handling.
-void DrawLineWidth(platform_bitmap_buffer *Buffer, vec_2 *Point1, vec_2 *Point2, color_triple *Color, float LineWidth)
+void DrawLineSegmentWithWidth(platform_bitmap_buffer *Buffer, vec_2 *StartPoint, vec_2 *EndPoint, color_triple *Color, float LineWidth)
 {
-    int x0 = (int)(Point1->X);
-    int x1 = (int)(Point2->X);
-    int y0 = (int)(Point1->Y);
-    int y1 = (int)(Point2->Y);
+    int x0 = (int)(StartPoint->X);
+    int x1 = (int)(EndPoint->X);
+    int y0 = (int)(StartPoint->Y);
+    int y1 = (int)(EndPoint->Y);
     float wd = LineWidth;
     int dx = abs(x1-x0), sx = x0 < x1 ? 1 : -1;
     int dy = abs(y1-y0), sy = y0 < y1 ? 1 : -1;
@@ -101,6 +101,19 @@ void DrawLineWidth(platform_bitmap_buffer *Buffer, vec_2 *Point1, vec_2 *Point2,
             err += dx; y0 += sy;
         }
     }
+}
+
+void PopulateScreenCrossingVec(vec_2 P1, vec_2 P2, )
+
+bool CheckScreenCrossing(vec_2 P1, vec_2 P2, int ScreenWidth, int ScreenHeight)
+{
+    if (P1.X < 0 && P2.X > 0) || (P1.X > 0 && P2.X < 0) return true;
+    if (P1.X < ScreenWidth && P2.X > ScreenWidth) || (P1.X > ScreenWidth && P2.X < ScreenWidth) return true;
+
+    if (P1.Y < 0 && P2.Y > 0) || (P1.Y > 0 && P2.Y < 0) return true;
+    if (P1.Y < ScreenHeight && P2.Y > ScreenHeight) || (P1.Y > ScreenHeight && P2.Y < ScreenHeight) return true;
+
+    return false;
 }
 
 void SetObjectModelForDraw(game_object *Object)
@@ -179,7 +192,7 @@ void DrawObjectModelIntoBuffer(platform_bitmap_buffer *Buffer, game_object *Obje
         Cur.Y = DrawVerts->Verts[cur].Y + Object->Midpoint.Y;
         Next.X = DrawVerts->Verts[next].X + Object->Midpoint.X;
         Next.Y = DrawVerts->Verts[next].Y + Object->Midpoint.Y;
-        DrawLineWidth(Buffer, &Cur, &Next, &Model->Color, Model->LineWidth);
+        DrawLineSegmentWithWidth(Buffer, &Cur, &Next, &Model->Color, Model->LineWidth);
         ++cur;
         if (i < Model->NumVertices - 2) ++next;
     }
@@ -189,7 +202,7 @@ void DrawObjectModelIntoBuffer(platform_bitmap_buffer *Buffer, game_object *Obje
         Cur.Y = DrawVerts->Verts[cur].Y + Object->Midpoint.Y;
         Next.X = DrawVerts->Verts[0].X + Object->Midpoint.X;
         Next.Y = DrawVerts->Verts[0].Y + Object->Midpoint.Y;
-        DrawLineWidth(Buffer, &Cur, &Next, &Model->Color, Model->LineWidth);
+        DrawLineSegmentWithWidth(Buffer, &Cur, &Next, &Model->Color, Model->LineWidth);
     }
 }
 
@@ -213,6 +226,11 @@ inline float CalculateVectorDistance(vec_2 P1, vec_2 P2)
 {
     float d = sqrtf(((P2.X - P1.X) * (P2.X - P1.X)) + ((P2.Y - P1.Y) * (P2.Y - P1.Y)));
     return d;
+}
+
+line_segment * MakeLineSegment(vec_2 *Start, vec_2 *End)
+{
+    line_segment *segment = PushToMemorySegment()
 }
 
 void TriggerEndGame()

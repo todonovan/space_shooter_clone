@@ -5,10 +5,19 @@
 #include "asteroids.h"
 #include "game_entities.h"
 
+// TODO!!!!!!!!!!!!!! Set drawing points as LINE SEGMENTS, not sets of vertices!
+// Change the drawing code to operate on line segments instead of points.
+// Will more easily facilitate arbitrary drawing
+
 void SetVertValue(vert_set *VertSet, uint32_t VertIndex, float XVal, float YVal)
 {
     VertSet->Verts[VertIndex].X = XVal;
     VertSet->Verts[VertIndex].Y = YVal;
+}
+
+inline float Slope(vec_2 *P1, vec_2 *P2)
+{
+    return ((P2->Y - P1->Y) / (P2->X - P1->X));
 }
 
 void SpawnAsteroid(game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, object_type AsteroidType, float X_Spawn, float Y_Spawn, float X_Mo, float Y_Mo, float AngularMomentum)
@@ -175,6 +184,47 @@ void InitializePlayer(memory_segment *MemSegment, game_state *GameState, loaded_
     Player->MaxMomentum = PLAYER_MAX_MOMENTUM;
     Player->IsVisible = true;
     Player->Radius = CalculateObjectRadius(Player);
+}
+
+void PopulateScreenCrossingVec(vec_2 *P1, vec_2 *P2, vec_2 *Crossing, int ScreenWidth, int ScreenHeight)
+{
+    if ((P1->X < 0 && P2->X > 0) || (P2->X < 0 && P1->X > 0))
+    {
+        Crossing->X = 0.0f;
+        float slope = Slope(P1, P2);
+        Crossing->Y = P1->Y + (fabs(P1->X) * slope);
+        return;
+    }
+    if ((P1->X < ScreenWidth && P2->X > ScreenWidth) || (P2->X < ScreenWidth && P1->X > ScreenWidth))
+    {
+        Crossing->X = (float)ScreenWidth;
+        float slope = Slope(P1, P2);
+        Crossing->Y = P1->Y + (fabs(P1->X - (float)ScreenWidth) * slope);
+        return;
+    }
+    if ((P1->Y < 0 && P2->Y > 0) || (P2->Y < 0 && P1->Y > 0))
+    {
+        Crossing->Y = 0.0f;
+        float slope = Slope(P1, P2);
+        Crossing->X = P1->X + (P1->Y * fabs(slope));
+    }
+    if ((P1->Y < ScreenHeight && P2->Y < ScreenHeight) || (P2->Y < ScreenHeight && P1->Y > ScreenHeight))
+    {
+        Crossing->Y = (float)ScreenHeight;
+        float slope = Slope(P1, P2);
+        Crossing->X = P1->X + ((P1->Y - (float)ScreenHeight) * slope);
+    }
+}
+
+bool CheckScreenCrossing(vec_2 P1, vec_2 P2, int ScreenWidth, int ScreenHeight)
+{
+    if (P1.X < 0 && P2.X > 0) || (P1.X > 0 && P2.X < 0) return true;
+    if (P1.X < ScreenWidth && P2.X > ScreenWidth) || (P1.X > ScreenWidth && P2.X < ScreenWidth) return true;
+
+    if (P1.Y < 0 && P2.Y > 0) || (P1.Y > 0 && P2.Y < 0) return true;
+    if (P1.Y < ScreenHeight && P2.Y > ScreenHeight) || (P1.Y > ScreenHeight && P2.Y < ScreenHeight) return true;
+
+    return false;
 }
 
 float CalculateObjectRadius(game_object *Object)
