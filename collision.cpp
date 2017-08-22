@@ -16,21 +16,38 @@
  *      This mirrored clones obviously aren't drawn and have to mimic the movements of the "real" entity,
  *      but allow for collision detection without 'splitting' the objects on the boundaries.
  *      Issue -- how does this work for corner cases? (Like, the literal corners of the world.)
+ *
+ *
+ *  Current crazy idea:
+ *      - Give each object 8 clones, making a 3x3 grid of "world spaces"
+ *      - Still need to add the concept of an AABB -- for EACH object + clone... alternatively keep doing the circle test but make it the largest radius possible, not simply an average.
+ *      - Only one of these world spaces, the middle, is rendered. The rest simply have their positions
+ *          tracked for collision purposes.
+ *      - On object move, move the object AND all clones. Check for collisions against all objects && their clones
+ *      - Meta-object (e.g., object + clones) should be stored together for easy jettisoning
+ *      - Memory is getting a little eesh. I honest-to-god might want to implement a sort of basic GC. Nothing that
+ *          does reference counting or anything similarly crazy. Instead, just mark memory chunks as zeroed out when
+ *          deleted, and pause occasionally to clear out unused memory.
+ *      - Alternatively, just go hog wild with memory and simply clear out the memory at the end of each level...
  */
 
 #include <windows.h>
 #include <stdint.h>
 #include <stdlib.h>
 
-
-bool CheckIfCollision(vec_2 Obj1Mid, float Obj1Rad, vec_2 Obj2Mid, float Obj2Rad)
+inline bool CheckCoarseCollision(vec_2 *Obj1_Position, game_object *Obj1, vec_2 *Obj2_Position, game_object *Obj2)
 {
-    return (CalculateVectorDistance(Obj1Mid, Obj2Mid)) < (Obj1Rad + Obj2Rad);
+    float radius_sum = Obj1->Radius + Obj2->Radius;
+    float distance = CalculateVectorDistance(Obj1->Midpoint, Obj2->Midpoint);
+    return distance <= radius_sum;
 }
 
-bool CheckCoarseCollision(game_object Obj1, game_object Obj2)
+// Accepting the position separate from the game_object itself allows the procedure to check collisions
+// for desired/targeted endpoints of movement, rather than simply limiting to the current, un-updated
+// position of an entity.
+bool CheckCollision(vec_2 *Obj1_Position, game_object *Obj1, vec_2 *Obj2_Position, game_object *Obj2)
 {
-    return false;
+    return CheckCoarseCollision(Obj1_Position, Obj1, Obj2_Position, Obj2);
 }
 
 void HandleCollision(game_state *GameState, loaded_resource_memory *Resources, game_object *Obj1, game_object *Obj2, uint32_t LaserIndex)

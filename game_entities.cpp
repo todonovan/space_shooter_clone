@@ -5,21 +5,71 @@
 #include "asteroids.h"
 #include "game_entities.h"
 
-void SetVertValue(vert_set *VertSet, uint32_t VertIndex, float XVal, float YVal)
+inline void SetVertValue(vec_2 *Vert, float XVal, float YVal)
+{
+    Vert->X = XVal;
+    Vert->Y = YVal;
+}
+
+inline void SetVertValue(vert_set *VertSet, uint32_t VertIndex, float XVal, float YVal)
 {
     VertSet->Verts[VertIndex].X = XVal;
     VertSet->Verts[VertIndex].Y = YVal;
 }
 
-void SpawnAsteroid(game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, object_type AsteroidType, float X_Spawn, float Y_Spawn, float X_Mo, float Y_Mo, float AngularMomentum)
+float CalculateMaxObjectRadius(game_object *Object)
+{
+    object_model *Model = Object->Model;
+    vec_2 *Verts = Object->Model->StartVerts->Verts;
+    float max_radius = 0.0f, current_radius = 0.0f;
+    vec_2 Zero = {};
+    for (uint32_t i = 0; i < Model->NumVertices; ++i)
+    {
+        current_radius = CalculateVectorDistance(Zero, Verts[i]);
+        if (current_radius > max_radius) max_radius = current_radius;
+    }
+    return max_radius;
+}
+
+clone_set * CreateClones(memory_segment *MemorySegment, game_object *Object, int ScreenWidth, int ScreenHeight)
+{
+    clone_set *CloneSet = PushToMemorySegment(MemorySegment, clone_set);
+    CloneSet->Count = 8;
+    CloneSet->Clones = PushArrayToMemorySegment(MemorySegment, 8, object_clone);
+    vec_2 ParentMidpoint = Object->Midpoint;
+
+    float X = ParentMidpoint.X - ScreenWidth;
+    float Y;
+    object_clone *Current = CloneSet->Clones;
+    for (int i = 0; i < 3; ++i)
+    {
+        Y = ParentMidpoint.Y - ScreenHeight;
+        for (int j = 0; j < 3; ++j)
+        {
+            if (i == 1 && j == 1) continue;
+            else
+            {
+                Current->Parent = Object;
+                Current->Midpoint = PushToMemorySegment(MemorySegment, vec_2);
+                SetVertValue(Current->Midpoint, X, Y);
+            }
+            Y += ScreenHeight;
+            Current++;
+        }
+        X += ScreenWidth;
+    }
+    return CloneSet;
+}
+
+game_object * SpawnAsteroid(game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, game_object_info *GameObjectInfo)
 {
     if (GameState->NumSpawnedAsteroids < MAX_NUM_SPAWNED_ASTEROIDS)
     {
         game_object *NewAsteroid = &GameState->SpawnedAsteroids->Asteroids[GameState->NumSpawnedAsteroids];
-        NewAsteroid->Type = AsteroidType;
+        NewAsteroid->Type = GameObjectInfo->Type;
         NewAsteroid->Model = PushToMemorySegment(MemorySegment, object_model);
         object_model *Model = NewAsteroid->Model;
-        vec_2 *ResourceVertices = 0;
+        vec_2 *ResourceVertices = {0};
         if (Model)
         {
             switch (NewAsteroid->Type)
@@ -50,19 +100,20 @@ void SpawnAsteroid(game_state *GameState, memory_segment *MemorySegment, loaded_
             Model->Color.Green = ASTEROID_GREEN;
             Model->Color.Blue = ASTEROID_BLUE;
             Model->LineWidth = ASTEROID_LINE_WIDTH;
-            NewAsteroid->Midpoint.X = X_Spawn;
-            NewAsteroid->Midpoint.Y = Y_Spawn;
-            NewAsteroid->X_Momentum = X_Mo;
-            NewAsteroid->Y_Momentum = Y_Mo;
+            NewAsteroid->Midpoint.X = GameObjectInfo->Midpoint->X;
+            NewAsteroid->Midpoint.Y = GameObjectInfo->Midpoint->Y;
+            NewAsteroid->X_Momentum = GameObjectInfo->X_Momentum;
+            NewAsteroid->Y_Momentum = GameObjectInfo->Y_Momentum;
             NewAsteroid->OffsetAngle = 0.0f;
-            NewAsteroid->AngularMomentum = AngularMomentum;
-            NewAsteroid->IsVisible = true;
+            NewAsteroid->AngularMomentum = GameObjectInfo->AngularMomentum;
+            NewAsteroid->IsVisible = GameObjectInfo->InitVisible;
             vert_set *Verts = GameState->SpawnedAsteroids->Asteroids[GameState->NumSpawnedAsteroids - 1].Model->StartVerts;
             for (uint32_t i = 0; i < NewAsteroid->Model->NumVertices; ++i)
             {
                 SetVertValue(Verts, i, ResourceVertices[i].X, ResourceVertices[i].Y);
             }
-            NewAsteroid->Radius = CalculateObjectRadius(NewAsteroid);
+            NewAsteroid->Radius = CalculateMaxObjectRadius(NewAsteroid);
+            return NewAsteroid;
         }
     }
     else
@@ -71,7 +122,7 @@ void SpawnAsteroid(game_state *GameState, memory_segment *MemorySegment, loaded_
     }
 }
 
-void SpawnLaser(game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, game_object *Player)
+game_object * SpawnLaser(game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, game_object *Player)
 {
     if (GameState->NumSpawnedLasers < GameState->MaxNumLasers)
     {
@@ -118,9 +169,10 @@ void SpawnLaser(game_state *GameState, memory_segment *MemorySegment, loaded_res
             float Y_Rot = (X * sinf(theta)) + (Y * cosf(theta));
             NewLaser->Midpoint.X = Player->Midpoint.X + X_Rot;
             NewLaser->Midpoint.Y = Player->Midpoint.Y + Y_Rot;
-            NewLaser->Radius = CalculateObjectRadius(NewLaser);
+            NewLaser->Radius = CalculateMaxObjectRadius(NewLaser);
 
             GameState->LaserSet->LifeTimers[NewLaserIndex] = 77; // enough to return to spawn position when going horizontally across the screen
+            return NewLaser;
         }
         else
         {
@@ -134,29 +186,22 @@ void SpawnLaser(game_state *GameState, memory_segment *MemorySegment, loaded_res
     }
 }
 
-void DespawnLaser(game_state *GameState, uint32_t LaserIndex)
+game_object * InitializePlayer(game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, vec_2 *Midpoint)
 {
-    GameState->LaserSet->Lasers[LaserIndex] = {};
-    GameState->LaserSet->LifeTimers[LaserIndex] = 0;
-    GameState->NumSpawnedLasers -= 1;
-}
-
-void InitializePlayer(memory_segment *MemSegment, game_state *GameState, loaded_resource_memory *Resources, float X_Coord, float Y_Coord)
-{
-    GameState->Player = PushToMemorySegment(&GameState->SceneMemorySegment, game_object);
+    GameState->Player = PushToMemorySegment(MemorySegment, game_object);
     game_object *Player = GameState->Player;
     Player->Type = PLAYER;
-    Player->Midpoint.X = X_Coord;
-    Player->Midpoint.Y = Y_Coord;
+    Player->Midpoint.X = Midpoint->X;
+    Player->Midpoint.Y = Midpoint->Y;
 
-    Player->Model = PushToMemorySegment(&GameState->SceneMemorySegment, object_model);
+    Player->Model = PushToMemorySegment(MemorySegment, object_model);
     object_model *P_Model = Player->Model;
     P_Model->NumVertices = PLAYER_NUM_VERTICES;
-    P_Model->StartVerts = PushToMemorySegment(&GameState->SceneMemorySegment, vert_set);
-    P_Model->StartVerts->Verts = PushArrayToMemorySegment(&GameState->SceneMemorySegment, PLAYER_NUM_VERTICES, vec_2);
+    P_Model->StartVerts = PushToMemorySegment(MemorySegment, vert_set);
+    P_Model->StartVerts->Verts = PushArrayToMemorySegment(MemorySegment, PLAYER_NUM_VERTICES, vec_2);
 
-    P_Model->DrawVerts = PushToMemorySegment(&GameState->SceneMemorySegment, vert_set);
-    P_Model->DrawVerts->Verts = PushArrayToMemorySegment(&GameState->SceneMemorySegment, PLAYER_NUM_VERTICES, vec_2);
+    P_Model->DrawVerts = PushToMemorySegment(MemorySegment, vert_set);
+    P_Model->DrawVerts->Verts = PushArrayToMemorySegment(MemorySegment, PLAYER_NUM_VERTICES, vec_2);
 
     // NOTE! These values will need to be stored in a 'resource' file -- a config text file, whatever.
     for (uint32_t i = 0; i < PLAYER_NUM_VERTICES; ++i)
@@ -174,18 +219,47 @@ void InitializePlayer(memory_segment *MemSegment, game_state *GameState, loaded_
     Player->AngularMomentum = PLAYER_ANGULAR_MOMENTUM;
     Player->MaxMomentum = PLAYER_MAX_MOMENTUM;
     Player->IsVisible = true;
-    Player->Radius = CalculateObjectRadius(Player);
+    Player->Radius = CalculateMaxObjectRadius(Player);
+
+    return Player;
 }
 
-float CalculateObjectRadius(game_object *Object)
+game_entity * CreateGameEntity(game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, game_object_info *GameObjectInfo)
 {
-    object_model *Model = Object->Model;
-    vec_2 *Verts = Object->Model->StartVerts->Verts;
-    float cur_mag = 0.0f;
-    vec_2 Zero = {};
-    for (uint32_t i = 0; i < Model->NumVertices; ++i)
+    game_object *Master;
+    switch (GameObjectInfo->Type)
     {
-        cur_mag += CalculateVectorDistance(Zero, Verts[i]);
+        case PLAYER:
+        {
+            Master = InitializePlayer(GameState, MemorySegment, Resources, GameObjectInfo->Midpoint);
+        } break;
+        case LASER:
+        {
+            Master = SpawnLaser(GameState, MemorySegment, Resources, GameState->Player);
+        } break;
+        case ASTEROID_SMALL:
+        case ASTEROID_MEDIUM:
+        case ASTEROID_LARGE:
+        {
+            Master = SpawnAsteroid(GameState, MemorySegment, Resources, GameObjectInfo);
+        } break;
+        default:
+        {
+            HackyAssert(0);
+        }
     }
-    return (cur_mag / (float)Model->NumVertices);
+    game_entity *Entity = PushToMemorySegment(MemorySegment, game_entity);
+    Entity->IsLive = GameObjectInfo->InitVisible;
+    Entity->Type = GameObjectInfo->Type;
+    Entity->Master = Master;
+    Entity->Clones = CreateClones(MemorySegment, Master, GameState->ScreenWidth, GameState->ScreenHeight);
+
+    return Entity;
+}
+
+void DespawnLaser(game_state *GameState, uint32_t LaserIndex)
+{
+    GameState->LaserSet->Lasers[LaserIndex] = {};
+    GameState->LaserSet->LifeTimers[LaserIndex] = 0;
+    GameState->NumSpawnedLasers -= 1;
 }

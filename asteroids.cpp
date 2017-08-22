@@ -55,12 +55,12 @@ void SetPixelInBuffer(platform_bitmap_buffer *Buffer, vec_2 *Coords, color_tripl
 
 /// TODO!! This implementation of Bresenham, courtesy of the internet, is busted. Must find better line-drawing
 /// alg that handles width properly. All Bresenham implementations seem to be poorly suited to width handling.
-void DrawLineWidth(platform_bitmap_buffer *Buffer, vec_2 *Point1, vec_2 *Point2, color_triple *Color, float LineWidth)
+void DrawLineSegmentWithWidth(platform_bitmap_buffer *Buffer, vec_2 *StartPoint, vec_2 *EndPoint, color_triple *Color, float LineWidth)
 {
-    int x0 = (int)(Point1->X);
-    int x1 = (int)(Point2->X);
-    int y0 = (int)(Point1->Y);
-    int y1 = (int)(Point2->Y);
+    int x0 = (int)(StartPoint->X);
+    int x1 = (int)(EndPoint->X);
+    int y0 = (int)(StartPoint->Y);
+    int y1 = (int)(EndPoint->Y);
     float wd = LineWidth;
     int dx = abs(x1-x0), sx = x0 < x1 ? 1 : -1;
     int dy = abs(y1-y0), sy = y0 < y1 ? 1 : -1;
@@ -179,7 +179,7 @@ void DrawObjectModelIntoBuffer(platform_bitmap_buffer *Buffer, game_object *Obje
         Cur.Y = DrawVerts->Verts[cur].Y + Object->Midpoint.Y;
         Next.X = DrawVerts->Verts[next].X + Object->Midpoint.X;
         Next.Y = DrawVerts->Verts[next].Y + Object->Midpoint.Y;
-        DrawLineWidth(Buffer, &Cur, &Next, &Model->Color, Model->LineWidth);
+        DrawLineSegmentWithWidth(Buffer, &Cur, &Next, &Model->Color, Model->LineWidth);
         ++cur;
         if (i < Model->NumVertices - 2) ++next;
     }
@@ -189,7 +189,7 @@ void DrawObjectModelIntoBuffer(platform_bitmap_buffer *Buffer, game_object *Obje
         Cur.Y = DrawVerts->Verts[cur].Y + Object->Midpoint.Y;
         Next.X = DrawVerts->Verts[0].X + Object->Midpoint.X;
         Next.Y = DrawVerts->Verts[0].Y + Object->Midpoint.Y;
-        DrawLineWidth(Buffer, &Cur, &Next, &Model->Color, Model->LineWidth);
+        DrawLineSegmentWithWidth(Buffer, &Cur, &Next, &Model->Color, Model->LineWidth);
     }
 }
 
@@ -213,6 +213,11 @@ inline float CalculateVectorDistance(vec_2 P1, vec_2 P2)
 {
     float d = sqrtf(((P2.X - P1.X) * (P2.X - P1.X)) + ((P2.Y - P1.Y) * (P2.Y - P1.Y)));
     return d;
+}
+
+line_segment * MakeLineSegment(vec_2 *Start, vec_2 *End)
+{
+    line_segment *segment = PushToMemorySegment();
 }
 
 void TriggerEndGame()
@@ -309,7 +314,7 @@ void LoadResources(loaded_resource_memory *ResourceMemory)
     {
         HackyAssert(false);
     }
-}
+}   
 
 void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *GamePermMemory, int BufferWidth, int BufferHeight)
 {
@@ -344,7 +349,7 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
                         (uint8_t *)Memory->PermanentStorage + sizeof(game_permanent_memory) + perm_storage_struct_size + ((Memory->PermanentStorageSize - perm_storage_struct_size) / 2));
     LoadResources(ResourceMemory);
 
-    InitializePlayer(&GameState->SceneMemorySegment, GameState, ResourceMemory, (float)(BufferWidth / 2), (float)(BufferHeight / 10));
+    InitializePlayer(GameState, &GameState->SceneMemorySegment, ResourceMemory, (float)(BufferWidth / 2), (float)(BufferHeight / 10));
 
     Memory->IsInitialized = true;
 }
@@ -415,7 +420,7 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
     for (uint32_t i = 0; i < GameState->NumSpawnedAsteroids; ++i)
     {
         game_object *CurAsteroid = &GameState->SpawnedAsteroids->Asteroids[i];
-        bool collision = CheckIfCollision(PlayerDesiredEnd, Player->Radius, CurAsteroid->Midpoint, CurAsteroid->Radius);
+        bool collision = CheckCollision(PlayerDesiredEnd, Player->Radius, CurAsteroid->Midpoint, CurAsteroid->Radius);
 
         if (collision && CurAsteroid->IsVisible)
         {
@@ -448,7 +453,7 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
         for (uint32_t a = 0; a < GameState->NumSpawnedAsteroids; ++a)
         {
             game_object *CurAsteroid = &GameState->SpawnedAsteroids->Asteroids[a];
-            bool collision = CheckIfCollision(GameState->LaserSet->Lasers[i].Midpoint, GameState->LaserSet->Lasers[i].Radius, CurAsteroid->Midpoint, CurAsteroid->Radius);
+            bool collision = CheckCollision(GameState->LaserSet->Lasers[i].Midpoint, GameState->LaserSet->Lasers[i].Radius, CurAsteroid->Midpoint, CurAsteroid->Radius);
             if (collision && CurAsteroid->IsVisible && GameState->LaserSet->Lasers[i].IsVisible)
             {
                 HandleCollision(GameState, LoadedResources, &GameState->LaserSet->Lasers[i], CurAsteroid, i);

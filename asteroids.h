@@ -24,7 +24,8 @@ struct vert_set
     vec_2 *Verts;
 };
 
-typedef enum object_type {
+typedef enum object_type
+{
     PLAYER,
     ASTEROID_LARGE,
     ASTEROID_MEDIUM,
@@ -41,6 +42,12 @@ struct object_model
     float LineWidth;
 };
 
+// Clones are needed for collision checking at screen boundaries.
+// A clone is simply a ref to an object (for vertex info) and an
+// offset. The clone's position is found by adding the offset to
+// the parent's position.
+
+
 struct game_object
 {
     object_type Type;
@@ -55,20 +62,53 @@ struct game_object
     bool IsVisible;
 };
 
+struct game_object_info
+{
+    object_type Type;
+    vec_2 *Midpoint;
+    float X_Momentum;
+    float Y_Momentum;
+    float OffsetAngle;
+    float AngularMomentum;
+    bool InitVisible;
+};
+
+struct object_clone
+{
+    game_object *Parent;
+    vec_2 *Midpoint;
+};
+
+struct clone_set
+{
+    uint32_t Count;
+    object_clone *Clones;
+};
+
+struct game_entity
+{
+    bool IsLive;
+    object_type Type;
+    game_object *Master;
+    clone_set *Clones;
+};
+
 struct asteroid_set
 {
-    game_object *Asteroids;
+    game_entity *Asteroids;
 };
 
 struct laser_set
 {
-    game_object *Lasers;
+    game_entity *Lasers;
     uint32_t *LifeTimers;
 };
 
 struct game_state
 {
     memory_segment SceneMemorySegment;
+    int ScreenWidth;
+    int ScreenHeight;
     game_object *Player;
     uint32_t NumSpawnedAsteroids;
     asteroid_set *SpawnedAsteroids;
