@@ -6,7 +6,7 @@
 
 
 void SetVertValue(vert_set *VertSet, uint32_t VertIndex, float XVal, float YVal);
-game_entity * CreateGameEntity(game_state *GameState, memory_segment *MemorySegment,
+void InitializeGameEntity(game_entity *Entity, game_state *GameState, memory_segment *MemorySegment,
                                loaded_resource_memory *Resources, game_object_info *GameObjectInfo);
 
 #endif // game_entities.h

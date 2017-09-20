@@ -42,21 +42,13 @@ struct object_model
     float LineWidth;
 };
 
-// Clones are needed for collision checking at screen boundaries.
-// A clone is simply a ref to an object (for vertex info) and an
-// offset. The clone's position is found by adding the offset to
-// the parent's position.
-
-
 struct game_object
 {
     object_type Type;
     object_model *Model;
     vec_2 Midpoint;
     float Radius;
-    float X_Momentum;
-    float Y_Momentum;
-    float MaxMomentum;
+    vec_2 Momentum;
     float OffsetAngle;
     float AngularMomentum;
     bool IsVisible;
@@ -65,13 +57,17 @@ struct game_object
 struct game_object_info
 {
     object_type Type;
-    vec_2 *Midpoint;
-    float X_Momentum;
-    float Y_Momentum;
+    vec_2 Midpoint;
+    vec_2 Momentum;
     float OffsetAngle;
     float AngularMomentum;
     bool InitVisible;
 };
+
+// Clones are needed for collision checking at screen boundaries.
+// A clone is simply a ref to an object (for vertex info) and an
+// offset. The clone's position is found by adding the offset to
+// the parent's position.
 
 struct object_clone
 {
@@ -106,20 +102,19 @@ struct laser_set
 
 struct game_state
 {
-    memory_segment SceneMemorySegment;
-    int ScreenWidth;
-    int ScreenHeight;
-    game_object *Player;
+    int WorldWidth;
+    int WorldHeight;
+    game_entity *Player;
     uint32_t NumSpawnedAsteroids;
     asteroid_set *SpawnedAsteroids;
     uint32_t MaxNumLasers;
     uint32_t NumSpawnedLasers;
+    memory_segment LaserMemorySegment;
     laser_set *LaserSet;
 };
 
 struct loaded_resource_memory
 {
-    memory_segment ResourceMemorySegment;
     vec_2 *PlayerVertices;
     vec_2 *SmallAsteroidVertices;
     vec_2 *MediumAsteroidVertices;
@@ -132,7 +127,18 @@ struct game_permanent_memory
     memory_segment PermMemSegment;
     game_state *GameState;
     loaded_resource_memory *Resources;
+    memory_segment ResourceMemorySegment;
+    memory_segment SceneMemorySegment;        
+    memory_segment LaserMemorySegment;
+    memory_segment AsteroidMemorySegment;
 };
+
+#define PERM_STORAGE_STRUCT_SIZE ((5 * (sizeof(memory_segment))) + (sizeof(game_state)) + (sizeof(loaded_resource_memory)))
+#define LASER_MEMORY_SIZE Megabytes(5)
+#define RESOURCE_MEMORY_SIZE Megabytes(1)
+#define ASTEROID_MEMORY_SIZE ((GAME_PERM_MEMORY_SIZE - LASER_MEMORY_SIZE - RESOURCE_MEMORY_SIZE) / 2)
+#define SCENE_MEMORY_SIZE ((GAME_PERM_MEMORY_SIZE - LASER_MEMORY_SIZE - RESOURCE_MEMORY_SIZE - ASTEROID_MEMORY_SIZE))
+
 
 #define PushArrayToMemorySegment(Segment, Count, type) (type *)AssignToMemorySegment_(Segment, (Count)*sizeof(type))
 #define PushToMemorySegment(Segment, type) (type *)AssignToMemorySegment_(Segment, sizeof(type))

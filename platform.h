@@ -13,6 +13,9 @@
 
 // Constants
 
+#define GAME_PERM_MEMORY_SIZE Megabytes(256)
+#define GAME_TRANSIENT_MEMORY_SIZE Megabytes(1024)
+
 #define PLAYER_NUM_VERTICES 4
 #define PLAYER_LINE_WIDTH 2.0f
 #define PLAYER_RED 200
@@ -41,6 +44,7 @@
 #define MAX_NUM_SPAWNED_LASERS 5
 
 #define LASER_SPEED_MAG 25.0f
+#define LASER_SPAWN_TIMER 77
 
 
 struct platform_bitmap_buffer

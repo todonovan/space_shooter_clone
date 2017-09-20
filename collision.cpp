@@ -31,7 +31,6 @@
  *      - Alternatively, just go hog wild with memory and simply clear out the memory at the end of each level...
  */
 
-#include <windows.h>
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -50,6 +49,12 @@ bool CheckCollision(vec_2 *Obj1_Position, game_object *Obj1, vec_2 *Obj2_Positio
     return CheckCoarseCollision(Obj1_Position, Obj1, Obj2_Position, Obj2);
 }
 
+void HandleCollision(game_state *GameState, loaded_resource_memory *Resources, game_object *Obj1, game_object *Obj2, uint32_t LaserIndex)
+{
+    return;
+}
+
+/*
 void HandleCollision(game_state *GameState, loaded_resource_memory *Resources, game_object *Obj1, game_object *Obj2, uint32_t LaserIndex)
 {
     switch(Obj1->Type)
@@ -94,3 +99,4 @@ void HandleCollision(game_state *GameState, loaded_resource_memory *Resources, g
         } break;
     }
 }
+*/

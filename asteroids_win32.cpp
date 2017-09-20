@@ -371,9 +371,9 @@ int CALLBACK WinMain(HINSTANCE Instance,
             // Allocate game memory.
 
             game_memory GameMemory = {};
-            GameMemory.PermanentStorageSize = Megabytes(256);
+            GameMemory.PermanentStorageSize = GAME_PERM_MEMORY_SIZE;
             GameMemory.PermanentStorage = VirtualAlloc(0, GameMemory.PermanentStorageSize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
-            GameMemory.TransientStorageSize = Megabytes(1024);
+            GameMemory.TransientStorageSize = GAME_TRANSIENT_MEMORY_SIZE;
             GameMemory.TransientStorage = VirtualAlloc(0, GameMemory.TransientStorageSize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
 
 

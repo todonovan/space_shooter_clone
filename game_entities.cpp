@@ -1,4 +1,3 @@
-#include <windows.h>
 #include <stdint.h>
 
 #include "platform.h"
@@ -65,7 +64,7 @@ game_object * SpawnAsteroid(game_state *GameState, memory_segment *MemorySegment
 {
     if (GameState->NumSpawnedAsteroids < MAX_NUM_SPAWNED_ASTEROIDS)
     {
-        game_object *NewAsteroid = &GameState->SpawnedAsteroids->Asteroids[GameState->NumSpawnedAsteroids];
+        game_object *NewAsteroid = PushToMemorySegment(MemorySegment, game_object);
         NewAsteroid->Type = GameObjectInfo->Type;
         NewAsteroid->Model = PushToMemorySegment(MemorySegment, object_model);
         object_model *Model = NewAsteroid->Model;
@@ -95,31 +94,34 @@ game_object * SpawnAsteroid(game_state *GameState, memory_segment *MemorySegment
             Model->StartVerts->Verts = PushArrayToMemorySegment(MemorySegment, Model->NumVertices, vec_2);
             Model->DrawVerts = PushToMemorySegment(MemorySegment, vert_set);
             Model->DrawVerts->Verts = PushArrayToMemorySegment(MemorySegment, Model->NumVertices, vec_2);
-            GameState->NumSpawnedAsteroids += 1;
             Model->Color.Red = ASTEROID_RED;
             Model->Color.Green = ASTEROID_GREEN;
             Model->Color.Blue = ASTEROID_BLUE;
             Model->LineWidth = ASTEROID_LINE_WIDTH;
-            NewAsteroid->Midpoint.X = GameObjectInfo->Midpoint->X;
-            NewAsteroid->Midpoint.Y = GameObjectInfo->Midpoint->Y;
-            NewAsteroid->X_Momentum = GameObjectInfo->X_Momentum;
-            NewAsteroid->Y_Momentum = GameObjectInfo->Y_Momentum;
+            NewAsteroid->Midpoint.X = GameObjectInfo->Midpoint.X;
+            NewAsteroid->Midpoint.Y = GameObjectInfo->Midpoint.Y;
+            NewAsteroid->Momentum.X = GameObjectInfo->Momentum.X;
+            NewAsteroid->Momentum.Y = GameObjectInfo->Momentum.Y;
             NewAsteroid->OffsetAngle = 0.0f;
             NewAsteroid->AngularMomentum = GameObjectInfo->AngularMomentum;
             NewAsteroid->IsVisible = GameObjectInfo->InitVisible;
-            vert_set *Verts = GameState->SpawnedAsteroids->Asteroids[GameState->NumSpawnedAsteroids - 1].Model->StartVerts;
+            vert_set *Verts = NewAsteroid->Model->StartVerts;
             for (uint32_t i = 0; i < NewAsteroid->Model->NumVertices; ++i)
             {
                 SetVertValue(Verts, i, ResourceVertices[i].X, ResourceVertices[i].Y);
             }
             NewAsteroid->Radius = CalculateMaxObjectRadius(NewAsteroid);
+            GameState->NumSpawnedAsteroids += 1;
             return NewAsteroid;
         }
     }
     else
     {
-        // Out of space to store asteroids; handle here?
+        HackyAssert(0);
     }
+
+    // Unreachable
+    return (game_object *)0;
 }
 
 game_object * SpawnLaser(game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, game_object *Player)
@@ -127,9 +129,9 @@ game_object * SpawnLaser(game_state *GameState, memory_segment *MemorySegment, l
     if (GameState->NumSpawnedLasers < GameState->MaxNumLasers)
     {
         uint32_t NewLaserIndex = 0;
-        while (GameState->LaserSet->Lasers[NewLaserIndex].IsVisible) NewLaserIndex++;
+        while (GameState->LaserSet->Lasers[NewLaserIndex].IsLive) NewLaserIndex++;
 
-        game_object *NewLaser = &GameState->LaserSet->Lasers[NewLaserIndex];
+        game_object *NewLaser = PushToMemorySegment(MemorySegment, game_object);
         NewLaser->Model = PushToMemorySegment(MemorySegment, object_model);
         object_model *Model = NewLaser->Model;
         vec_2 *ResourceVertices = Resources->LaserVertices;
@@ -141,19 +143,10 @@ game_object * SpawnLaser(game_state *GameState, memory_segment *MemorySegment, l
             Model->StartVerts->Verts = PushArrayToMemorySegment(MemorySegment, Model->NumVertices, vec_2);
             Model->DrawVerts = PushToMemorySegment(MemorySegment, vert_set);
             Model->DrawVerts->Verts = PushArrayToMemorySegment(MemorySegment, Model->NumVertices, vec_2);
-            GameState->NumSpawnedLasers += 1;
             Model->Color.Red = LASER_RED;
             Model->Color.Green = LASER_GREEN;
             Model->Color.Blue = LASER_BLUE;
             Model->LineWidth = LASER_LINE_WIDTH;
-
-            float mag = LASER_SPEED_MAG;
-            float theta = Player->OffsetAngle;
-            NewLaser->OffsetAngle = theta;
-            NewLaser->X_Momentum = mag * cosf(theta + (3.14159f / 2.0f));
-            NewLaser->Y_Momentum = mag * sinf(theta + (3.14159f / 2.0f));
-            NewLaser->AngularMomentum = 0.0f;
-            NewLaser->IsVisible = true;
 
             vert_set *Verts = Model->StartVerts;
             for (uint32_t i = 0; i < Model->NumVertices; ++i)
@@ -161,38 +154,31 @@ game_object * SpawnLaser(game_state *GameState, memory_segment *MemorySegment, l
                 SetVertValue(Verts, i, ResourceVertices[i].X, ResourceVertices[i].Y);
             }
 
-            // Laser midpoint calculated by halving the laser model vector, then rotating that vector
-            // by the offset angle, then adding those values to the Player object's midpoint.
-            float X = 0.0f;
-            float Y = (Resources->LaserVertices[1].Y / 2.0f);
-            float X_Rot = (X * cosf(theta)) - (Y * sinf(theta));
-            float Y_Rot = (X * sinf(theta)) + (Y * cosf(theta));
-            NewLaser->Midpoint.X = Player->Midpoint.X + X_Rot;
-            NewLaser->Midpoint.Y = Player->Midpoint.Y + Y_Rot;
-            NewLaser->Radius = CalculateMaxObjectRadius(NewLaser);
-
-            GameState->LaserSet->LifeTimers[NewLaserIndex] = 77; // enough to return to spawn position when going horizontally across the screen
             return NewLaser;
         }
         else
         {
             // Error creating model; handle here
+            HackyAssert(0);
         }
     }
     else
     {
         // Can't spawn more lasers; do any necessary handling here (sound effects, etc.)
         // But likely none needed.
+        HackyAssert(0);
     }
+
+    // Unreachable
+    return (game_object *)0;
 }
 
-game_object * InitializePlayer(game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, vec_2 *Midpoint)
+game_object * SpawnPlayer(game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, game_object_info *GameObjectInfo)
 {
-    GameState->Player = PushToMemorySegment(MemorySegment, game_object);
-    game_object *Player = GameState->Player;
+    game_object *Player = PushToMemorySegment(MemorySegment, game_object);
     Player->Type = PLAYER;
-    Player->Midpoint.X = Midpoint->X;
-    Player->Midpoint.Y = Midpoint->Y;
+    Player->Midpoint.X = GameObjectInfo->Midpoint.X;
+    Player->Midpoint.Y = GameObjectInfo->Midpoint.Y;
 
     Player->Model = PushToMemorySegment(MemorySegment, object_model);
     object_model *P_Model = Player->Model;
@@ -206,7 +192,7 @@ game_object * InitializePlayer(game_state *GameState, memory_segment *MemorySegm
     // NOTE! These values will need to be stored in a 'resource' file -- a config text file, whatever.
     for (uint32_t i = 0; i < PLAYER_NUM_VERTICES; ++i)
     {
-        SetVertValue(GameState->Player->Model->StartVerts, i, Resources->PlayerVertices[i].X, Resources->PlayerVertices[i].Y);
+        SetVertValue(P_Model->StartVerts, i, Resources->PlayerVertices[i].X, Resources->PlayerVertices[i].Y);
     }
 
     P_Model->LineWidth = PLAYER_LINE_WIDTH;
@@ -214,28 +200,29 @@ game_object * InitializePlayer(game_state *GameState, memory_segment *MemorySegm
     P_Model->Color.Red = PLAYER_RED;
     P_Model->Color.Green = PLAYER_GREEN;
     P_Model->Color.Blue = PLAYER_BLUE;
-    Player->X_Momentum = 0.0f, Player->Y_Momentum = 0.0f;
-    Player->OffsetAngle = 0.0f;
-    Player->AngularMomentum = PLAYER_ANGULAR_MOMENTUM;
-    Player->MaxMomentum = PLAYER_MAX_MOMENTUM;
-    Player->IsVisible = true;
+    Player->Momentum.X = GameObjectInfo->Momentum.X;
+    Player->Momentum.Y = GameObjectInfo->Momentum.Y;
+    Player->OffsetAngle = GameObjectInfo->OffsetAngle;
+    Player->AngularMomentum = GameObjectInfo->AngularMomentum;
+    Player->IsVisible = GameObjectInfo->InitVisible;
     Player->Radius = CalculateMaxObjectRadius(Player);
 
     return Player;
 }
 
-game_entity * CreateGameEntity(game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, game_object_info *GameObjectInfo)
+void InitializeGameEntity(game_entity *Entity, game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, game_object_info *GameObjectInfo)
 {
-    game_object *Master;
+    game_object *Master = 0;
     switch (GameObjectInfo->Type)
     {
         case PLAYER:
         {
-            Master = InitializePlayer(GameState, MemorySegment, Resources, GameObjectInfo->Midpoint);
+            Master = SpawnPlayer(GameState, MemorySegment, Resources, GameObjectInfo);
+            GameState->Player = Entity;
         } break;
         case LASER:
         {
-            Master = SpawnLaser(GameState, MemorySegment, Resources, GameState->Player);
+            Master = SpawnLaser(GameState, MemorySegment, Resources, GameState->Player->Master);
         } break;
         case ASTEROID_SMALL:
         case ASTEROID_MEDIUM:
@@ -248,18 +235,52 @@ game_entity * CreateGameEntity(game_state *GameState, memory_segment *MemorySegm
             HackyAssert(0);
         }
     }
-    game_entity *Entity = PushToMemorySegment(MemorySegment, game_entity);
-    Entity->IsLive = GameObjectInfo->InitVisible;
+    Entity->IsLive = true;
     Entity->Type = GameObjectInfo->Type;
     Entity->Master = Master;
-    Entity->Clones = CreateClones(MemorySegment, Master, GameState->ScreenWidth, GameState->ScreenHeight);
-
-    return Entity;
+    Entity->Clones = CreateClones(MemorySegment, Master, GameState->WorldWidth, GameState->WorldHeight);
 }
 
-void DespawnLaser(game_state *GameState, uint32_t LaserIndex)
+void FireLaser(game_state *GameState, memory_segment *LaserMemSegment, loaded_resource_memory *Resources, game_entity *Player)
 {
-    GameState->LaserSet->Lasers[LaserIndex] = {};
+    laser_set *LaserSet = GameState->LaserSet;
+    uint32_t LaserIndex = 0;
+    for (; LaserIndex < GameState->MaxNumLasers; ++LaserIndex)
+    {
+        if (LaserSet->LifeTimers[LaserIndex] == 0)
+        {
+            break;
+        }
+    }
+
+    game_entity *NewLaserEntity = &LaserSet->Lasers[LaserIndex];
+    game_object *NewLaser = NewLaserEntity->Master;
+
+    float mag = LASER_SPEED_MAG;
+    float theta = Player->Master->OffsetAngle;
+    NewLaser->OffsetAngle = theta;
+    NewLaser->Momentum.X = mag * cosf(theta + (3.14159f / 2.0f));
+    NewLaser->Momentum.Y = mag * sinf(theta + (3.14159f / 2.0f));
+    NewLaser->AngularMomentum = 0.0f;
+    NewLaser->IsVisible = true;
+
+    // Laser midpoint calculated by halving the laser model vector, then rotating that vector
+    // by the offset angle, then adding those values to the Player object's midpoint.
+    float X = 0.0f;
+    float Y = (Resources->LaserVertices[1].Y / 2.0f);
+    float X_Rot = (X * cosf(theta)) - (Y * sinf(theta));
+    float Y_Rot = (X * sinf(theta)) + (Y * cosf(theta));
+    NewLaser->Midpoint.X = Player->Master->Midpoint.X + X_Rot;
+    NewLaser->Midpoint.Y = Player->Master->Midpoint.Y + Y_Rot;
+    NewLaser->Radius = CalculateMaxObjectRadius(NewLaser);
+
+    GameState->LaserSet->LifeTimers[LaserIndex] = 77; // enough to return to spawn position when going horizontally across the screen
+    GameState->NumSpawnedLasers += 1;
+}
+
+void KillLaser(game_state *GameState, uint32_t LaserIndex)
+{
+    GameState->LaserSet->Lasers[LaserIndex].Master->IsVisible = false;
     GameState->LaserSet->LifeTimers[LaserIndex] = 0;
     GameState->NumSpawnedLasers -= 1;
 }
