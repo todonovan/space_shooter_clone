@@ -412,7 +412,7 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     PlayerInfo.InitVisible = true;
 
     GameState->Player = PushToMemorySegment(&GamePermMemory->SceneMemorySegment, game_entity);
-    InitializeGameEntity(GameState->Player, GameState, &GamePermMemory->SceneMemorySegment, ResourceMemory, &PlayerInfo);
+    InitializePlayer(GameState->Player, GameState, &GamePermMemory->SceneMemorySegment, ResourceMemory, &PlayerInfo);
 
     // No asteroids are spawned at game startup, but instead at level startup, which occurs later in the process.
     GameState->NumSpawnedAsteroids = 0;
@@ -430,12 +430,7 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     game_object_info BlankLaserInfo = {};
     BlankLaserInfo.Type = LASER;
     BlankLaserInfo.InitVisible = false;
-    game_entity *CurrentBlankLaser = GameState->LaserSet->Lasers;
-    for (uint32_t i = 0; i < GameState->MaxNumLasers; ++i)
-    {
-        InitializeGameEntity(&GameState->LaserSet->Lasers[i], GameState, &GamePermMemory->LaserMemorySegment, ResourceMemory, &BlankLaserInfo);
-        GameState->LaserSet->LifeTimers[i] = 0;
-    }
+    InitializeLaserEntities(GameState->LaserSet->Lasers, GameState, &GamePermMemory->LaserMemorySegment, ResourceMemory, &BlankLaserInfo);
     Memory->IsInitialized = true;
 }
 

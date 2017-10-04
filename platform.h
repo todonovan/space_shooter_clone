@@ -2,6 +2,7 @@
 #define PLATFORM_H
 
 #include <windows.h>
+#include <DSound.h>
 
 // Macros
 
@@ -33,7 +34,7 @@
 #define ASTEROID_GREEN 125
 #define ASTEROID_BLUE 125
 
-#define MAX_NUM_SPAWNED_ASTEROIDS 100
+#define MAX_NUM_SPAWNED_ASTEROIDS 98 // Each large asteroid results in 7 total asteroids spawning; 98 gives max of 14 large asteroids
 
 #define LASER_LINE_WIDTH 1.0f
 #define LASER_NUM_VERTICES 2

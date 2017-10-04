@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <math.h>
 
 #include "platform.h"
 #include "asteroids.h"
@@ -60,7 +61,32 @@ clone_set * CreateClones(memory_segment *MemorySegment, game_object *Object, int
     return CloneSet;
 }
 
-game_object * SpawnAsteroid(game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, game_object_info *GameObjectInfo)
+void UpdateClones(game_entity *Entity, int ScreenWidth, int ScreenHeight)
+{
+    clone_set *CloneSet = Entity->Clones;
+    vec_2 ParentMidpoint = Entity->Master->Midpoint;
+
+    float X = ParentMidpoint.X - ScreenWidth;
+    float Y;
+    object_clone *Current = CloneSet->Clones;
+    for (int i = 0; i < 3; ++i)
+    {
+        Y = ParentMidpoint.Y - ScreenHeight;
+        for (int j = 0; j < 3; ++j)
+        {
+            if (i == 1 && j == 1) continue;
+            else
+            {
+                SetVertValue(Current->Midpoint, X, Y);
+            }
+            Y += ScreenHeight;
+            Current++;
+        }
+        X += ScreenWidth;
+    }
+}
+
+game_object * SpawnAsteroidObject(game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, game_object_info *GameObjectInfo)
 {
     if (GameState->NumSpawnedAsteroids < MAX_NUM_SPAWNED_ASTEROIDS)
     {
@@ -111,7 +137,7 @@ game_object * SpawnAsteroid(game_state *GameState, memory_segment *MemorySegment
                 SetVertValue(Verts, i, ResourceVertices[i].X, ResourceVertices[i].Y);
             }
             NewAsteroid->Radius = CalculateMaxObjectRadius(NewAsteroid);
-            GameState->NumSpawnedAsteroids += 1;
+            if (GameObjectInfo->NewEntity) GameState->NumSpawnedAsteroids += 1;
             return NewAsteroid;
         }
     }
@@ -124,7 +150,7 @@ game_object * SpawnAsteroid(game_state *GameState, memory_segment *MemorySegment
     return (game_object *)0;
 }
 
-game_object * SpawnLaser(game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, game_object *Player)
+game_object * SpawnLaserObject(game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, game_object_info *GameObjInfo)
 {
     if (GameState->NumSpawnedLasers < GameState->MaxNumLasers)
     {
@@ -153,7 +179,7 @@ game_object * SpawnLaser(game_state *GameState, memory_segment *MemorySegment, l
             {
                 SetVertValue(Verts, i, ResourceVertices[i].X, ResourceVertices[i].Y);
             }
-
+            NewLaser->IsVisible = GameObjInfo->InitVisible;
             return NewLaser;
         }
         else
@@ -173,7 +199,7 @@ game_object * SpawnLaser(game_state *GameState, memory_segment *MemorySegment, l
     return (game_object *)0;
 }
 
-game_object * SpawnPlayer(game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, game_object_info *GameObjectInfo)
+game_object * SpawnPlayerObject(game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, game_object_info *GameObjectInfo)
 {
     game_object *Player = PushToMemorySegment(MemorySegment, game_object);
     Player->Type = PLAYER;
@@ -210,35 +236,43 @@ game_object * SpawnPlayer(game_state *GameState, memory_segment *MemorySegment, 
     return Player;
 }
 
-void InitializeGameEntity(game_entity *Entity, game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, game_object_info *GameObjectInfo)
+void InitializePlayer(game_entity *Player, game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, game_object_info *GameObjInfo)
 {
-    game_object *Master = 0;
-    switch (GameObjectInfo->Type)
-    {
-        case PLAYER:
-        {
-            Master = SpawnPlayer(GameState, MemorySegment, Resources, GameObjectInfo);
-            GameState->Player = Entity;
-        } break;
-        case LASER:
-        {
-            Master = SpawnLaser(GameState, MemorySegment, Resources, GameState->Player->Master);
-        } break;
-        case ASTEROID_SMALL:
-        case ASTEROID_MEDIUM:
-        case ASTEROID_LARGE:
-        {
-            Master = SpawnAsteroid(GameState, MemorySegment, Resources, GameObjectInfo);
-        } break;
-        default:
-        {
-            HackyAssert(0);
-        }
-    }
+    game_object *PlayerObject = SpawnPlayerObject(GameState, MemorySegment, Resources, GameObjInfo);
+    Player->IsLive = true;
+    Player->Type = GameObjInfo->Type;
+    Player->Master = PlayerObject;
+    Player->Clones = CreateClones(MemorySegment, PlayerObject, GameState->WorldWidth, GameState->WorldHeight);
+}
+
+void InitializeAsteroidEntity(game_entity *Entity, game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, game_object_info *GameObjInfo)
+{
+    game_object *AsteroidObject = SpawnAsteroidObject(GameState, MemorySegment, Resources, GameObjInfo);
     Entity->IsLive = true;
-    Entity->Type = GameObjectInfo->Type;
-    Entity->Master = Master;
-    Entity->Clones = CreateClones(MemorySegment, Master, GameState->WorldWidth, GameState->WorldHeight);
+    Entity->Type = GameObjInfo->Type;
+    Entity->Master = AsteroidObject;
+    Entity->Clones = CreateClones(MemorySegment, AsteroidObject, GameState->WorldWidth, GameState->WorldHeight);
+}
+
+void RepurposeAsteroidEntity(game_entity *Old, game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, game_object_info *NewAsteroidInfo)
+{
+    game_object *NewAsteroidObject = SpawnAsteroidObject(GameState, MemorySegment, Resources, NewAsteroidInfo);
+    Old->Master = NewAsteroidObject;
+    Old->IsLive = true;
+    Old->Type = NewAsteroidInfo->Type;
+    Old->Clones = CreateClones(MemorySegment, NewAsteroidObject, GameState->WorldWidth, GameState->WorldHeight);
+}
+
+void InitializeLaserEntities(game_entity *Lasers, game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, game_object_info *GameObjInfo)
+{
+    for (uint32_t i = 0; i < GameState->MaxNumLasers; ++i)
+    {
+        game_object *LaserObject = SpawnLaserObject(GameState, MemorySegment, Resources, GameObjInfo);
+        Lasers[i].IsLive = true;
+        Lasers[i].Master = LaserObject;
+        Lasers[i].Type = GameObjInfo->Type;
+        Lasers[i].Clones = CreateClones(MemorySegment, LaserObject, GameState->WorldWidth, GameState->WorldHeight);
+    }
 }
 
 void FireLaser(game_state *GameState, memory_segment *LaserMemSegment, loaded_resource_memory *Resources, game_entity *Player)
@@ -255,6 +289,7 @@ void FireLaser(game_state *GameState, memory_segment *LaserMemSegment, loaded_re
 
     game_entity *NewLaserEntity = &LaserSet->Lasers[LaserIndex];
     game_object *NewLaser = NewLaserEntity->Master;
+    
 
     float mag = LASER_SPEED_MAG;
     float theta = Player->Master->OffsetAngle;
@@ -273,7 +308,7 @@ void FireLaser(game_state *GameState, memory_segment *LaserMemSegment, loaded_re
     NewLaser->Midpoint.X = Player->Master->Midpoint.X + X_Rot;
     NewLaser->Midpoint.Y = Player->Master->Midpoint.Y + Y_Rot;
     NewLaser->Radius = CalculateMaxObjectRadius(NewLaser);
-
+    UpdateClones(NewLaserEntity, GameState->WorldWidth, GameState->WorldHeight);
     GameState->LaserSet->LifeTimers[LaserIndex] = 77; // enough to return to spawn position when going horizontally across the screen
     GameState->NumSpawnedLasers += 1;
 }

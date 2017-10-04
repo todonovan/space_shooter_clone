@@ -33,6 +33,7 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include "asteroids.h"
 
 inline bool CheckCoarseCollision(vec_2 *Obj1_Position, game_object *Obj1, vec_2 *Obj2_Position, game_object *Obj2)
 {

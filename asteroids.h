@@ -62,6 +62,7 @@ struct game_object_info
     float OffsetAngle;
     float AngularMomentum;
     bool InitVisible;
+    bool NewEntity; // false if the associated entity is being 'repurposed'
 };
 
 // Clones are needed for collision checking at screen boundaries.
