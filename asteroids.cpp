@@ -137,27 +137,6 @@ void SetObjectModelForDraw(game_object *Object)
     }
 }
 
-inline void HandleEntityEdgeWarping(game_entity *Entity, int Width, int Height)
-{
-    game_object *Object = Entity->Master;
-    if (Object->Midpoint.X < 0)
-    {
-        Object->Midpoint.X += Width;
-    }
-    else if (Object->Midpoint.X >= Width)
-    {
-        Object->Midpoint.X -= Width;
-    }
-    if (Object->Midpoint.Y < 0)
-    {
-        Object->Midpoint.Y += Height;
-    }
-    else if (Object->Midpoint.Y >= Height)
-    {
-        Object->Midpoint.Y -= Height;
-    }
-}
-
 // TODO: This proc just doesn't feel right when moving the player ship. Will have to revise.
 // Will go back to unchecked top speed for now.
 /*void AdjustMomentumValuesAgainstMax(game_object *Object, float Input_X, float Input_Y)
@@ -434,6 +413,27 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     Memory->IsInitialized = true;
 }
 
+void HandleControllerInput(platform_player_input *Input, game_state *GameState, game_permanent_memory *GameMemory, loaded_resource_memory *Resources)
+{
+    if (Input->Start_Pressed)
+    {
+        PostQuitMessage(0);
+    }
+    if (Input->B_Pressed && !Input->B_Was_Pressed)
+    {
+        if (GameState->NumSpawnedLasers < GameState->MaxNumLasers) FireLaser(GameState, &GameMemory->LaserMemorySegment, Resources, GameState->Player);
+    }
+
+    vec_2 MomentumAdjustment = {};
+
+    // Note: This procedure currently gives bad control feel; must be reworked.
+    //AdjustMomentumValuesAgainstMax(Player, PlayerInput->NormalizedLX * PlayerInput->Magnitude,
+    //                              PlayerInput->NormalizedLY * PlayerInput->Magnitude);
+    MomentumAdjustment.X = Input->NormalizedLX * Input->Magnitude * 0.8f;
+    MomentumAdjustment.Y = Input->NormalizedLY * Input->Magnitude * 0.8f;
+    UpdateGameEntityMomentumAndAngle(GameState, MomentumAdjustment, (Input->LTrigger + Input->RTrigger));    
+}
+
 void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenBuffer, platform_sound_buffer *SoundBuffer, platform_player_input *PlayerInput)
 {
     game_permanent_memory *GamePermMemory = (game_permanent_memory *)Memory->PermanentStorage;
@@ -474,30 +474,14 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
             } break;
         }
     }*/
-    if (PlayerInput->B_Pressed && !PlayerInput->B_Was_Pressed)
-    {
-        if (GameState->NumSpawnedLasers < GameState->MaxNumLasers) FireLaser(GameState, &GamePermMemory->LaserMemorySegment, LoadedResources, PlayerEntity);
-    }
+
+    HandleControllerInput(PlayerInput, GameState, GamePermMemory, LoadedResources);
 
     game_entity *Asteroids = GameState->SpawnedAsteroids->Asteroids;
-    Player->OffsetAngle += Player->AngularMomentum * (PlayerInput->LTrigger + PlayerInput->RTrigger);
+    vec_2 PlayerDesiredEnd = AddVectors(Player->Midpoint, Player->Momentum);
 
-    for (uint32_t i = 0; i < GameState->NumSpawnedAsteroids; ++i)
-    {
-        Asteroids[i].Master->OffsetAngle += Asteroids[i].Master->AngularMomentum;
-    }
 
-    // Note: This procedure currently gives bad control feel; must be reworked.
-    //AdjustMomentumValuesAgainstMax(Player, PlayerInput->NormalizedLX * PlayerInput->Magnitude,
-    //                              PlayerInput->NormalizedLY * PlayerInput->Magnitude);
-
-    Player->Momentum.X += (PlayerInput->NormalizedLX * PlayerInput->Magnitude * 0.8f);
-    Player->Momentum.Y += (PlayerInput->NormalizedLY * PlayerInput->Magnitude * 0.8f);
-
-    vec_2 PlayerDesiredEnd = {};
-    PlayerDesiredEnd.X = Player->Midpoint.X + Player->Momentum.X;
-    PlayerDesiredEnd.Y = Player->Midpoint.Y + Player->Momentum.Y;
-
+    // Collision handling
     for (uint32_t i = 0; i < GameState->NumSpawnedAsteroids; ++i)
     {
         game_object *CurAsteroid = GameState->SpawnedAsteroids->Asteroids[i].Master;
@@ -509,21 +493,34 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
         }
     }
 
-    Player->Midpoint.X = PlayerDesiredEnd.X;
-    Player->Midpoint.Y = PlayerDesiredEnd.Y;
+    Player->Midpoint = PlayerDesiredEnd;
+    object_clone *PlayerClones = GameState->Player->CloneSet->Clones;
+    for (int i = 0; i < NUM_OBJ_CLONES; ++i)
+    {
+        PlayerClones[i].ClonedObject->Midpoint = AddVectors(PlayerClones[i].ClonedObject->Midpoint, PlayerClones[i].ClonedObject->Momentum);
+    }
 
     for (uint32_t i = 0; i < GameState->NumSpawnedAsteroids; ++i)
     {
-        Asteroids[i].Master->Midpoint.X += Asteroids[i].Master->Momentum.X;
-        Asteroids[i].Master->Midpoint.Y += Asteroids[i].Master->Momentum.Y;
+        Asteroids[i].Master->Midpoint = AddVectors(Asteroids[i].Master->Midpoint, Asteroids[i].Master->Momentum);
+        object_clone *CloneSet = Asteroids[i].CloneSet->Clones;
+        for (int j = 0; j < NUM_OBJ_CLONES; ++j)
+        {
+            CloneSet[j].ClonedObject->Midpoint = AddVectors(CloneSet[j].ClonedObject->Midpoint, CloneSet[j].ClonedObject->Momentum);
+        }
     }
 
     for (uint32_t i = 0; i < GameState->MaxNumLasers; ++i)
     {
         if (GameState->LaserSet->LifeTimers[i] > 0)
         {
-            GameState->LaserSet->Lasers[i].Master->Midpoint.X += GameState->LaserSet->Lasers[i].Master->Momentum.X;
-            GameState->LaserSet->Lasers[i].Master->Midpoint.Y += GameState->LaserSet->Lasers[i].Master->Momentum.Y;
+            game_entity *CurrentLaser = &GameState->LaserSet->Lasers[i];
+            CurrentLaser->Master->Midpoint = AddVectors(CurrentLaser->Master->Midpoint, CurrentLaser->Master->Momentum);
+            for (uint32_t j = 0; j < NUM_OBJ_CLONES; ++j)
+            {
+                game_object *Clone = CurrentLaser->CloneSet->Clones[j].ClonedObject;
+                Clone->Midpoint = AddVectors(Clone->Midpoint, Clone->Momentum);
+            }
             GameState->LaserSet->LifeTimers[i] -= 1;
         }
         else if (GameState->LaserSet->Lasers[i].Master->IsVisible && GameState->LaserSet->LifeTimers[i] == 0)

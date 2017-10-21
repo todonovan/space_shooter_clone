@@ -4,6 +4,7 @@
 #include "platform.h"
 #include "asteroids.h"
 #include "game_entities.h"
+#include "collision.h"
 
 inline void SetVertValue(vec_2 *Vert, float XVal, float YVal)
 {
@@ -31,12 +32,13 @@ float CalculateMaxObjectRadius(game_object *Object)
     return max_radius;
 }
 
-clone_set * CreateClones(memory_segment *MemorySegment, game_object *Object, int ScreenWidth, int ScreenHeight)
+clone_set * CreateClones(memory_segment *MemorySegment, game_entity *Entity, int ScreenWidth, int ScreenHeight)
 {
     clone_set *CloneSet = PushToMemorySegment(MemorySegment, clone_set);
     CloneSet->Count = 8;
     CloneSet->Clones = PushArrayToMemorySegment(MemorySegment, 8, object_clone);
-    vec_2 ParentMidpoint = Object->Midpoint;
+    game_object *Master = Entity->Master;
+    vec_2 ParentMidpoint = Master->Midpoint;
 
     float X = ParentMidpoint.X - ScreenWidth;
     float Y;
@@ -49,9 +51,17 @@ clone_set * CreateClones(memory_segment *MemorySegment, game_object *Object, int
             if (i == 1 && j == 1) continue;
             else
             {
-                Current->Parent = Object;
-                Current->Midpoint = PushToMemorySegment(MemorySegment, vec_2);
-                SetVertValue(Current->Midpoint, X, Y);
+                Current->ParentEntity = Entity;
+                Current->ClonedObject = PushToMemorySegment(MemorySegment, game_object);
+                game_object *Clone = Current->ClonedObject;
+                Clone->Type = Master->Type;
+                Clone->Model = Master->Model;
+                Clone->Radius = Master->Radius;
+                Clone->Momentum = Master->Momentum;
+                Clone->OffsetAngle = Master->OffsetAngle;
+                Clone->AngularMomentum = Master->AngularMomentum;
+                Clone->IsVisible = false;
+                SetVertValue(&Clone->Midpoint, X, Y); 
             }
             Y += ScreenHeight;
             Current++;
@@ -63,7 +73,7 @@ clone_set * CreateClones(memory_segment *MemorySegment, game_object *Object, int
 
 void UpdateClones(game_entity *Entity, int ScreenWidth, int ScreenHeight)
 {
-    clone_set *CloneSet = Entity->Clones;
+    clone_set *CloneSet = Entity->CloneSet;
     vec_2 ParentMidpoint = Entity->Master->Midpoint;
 
     float X = ParentMidpoint.X - ScreenWidth;
@@ -77,7 +87,7 @@ void UpdateClones(game_entity *Entity, int ScreenWidth, int ScreenHeight)
             if (i == 1 && j == 1) continue;
             else
             {
-                SetVertValue(Current->Midpoint, X, Y);
+                SetVertValue(&Current->ClonedObject->Midpoint, X, Y);
             }
             Y += ScreenHeight;
             Current++;
@@ -242,7 +252,7 @@ void InitializePlayer(game_entity *Player, game_state *GameState, memory_segment
     Player->IsLive = true;
     Player->Type = GameObjInfo->Type;
     Player->Master = PlayerObject;
-    Player->Clones = CreateClones(MemorySegment, PlayerObject, GameState->WorldWidth, GameState->WorldHeight);
+    Player->CloneSet = CreateClones(MemorySegment, Player, GameState->WorldWidth, GameState->WorldHeight);
 }
 
 void InitializeAsteroidEntity(game_entity *Entity, game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, game_object_info *GameObjInfo)
@@ -251,7 +261,7 @@ void InitializeAsteroidEntity(game_entity *Entity, game_state *GameState, memory
     Entity->IsLive = true;
     Entity->Type = GameObjInfo->Type;
     Entity->Master = AsteroidObject;
-    Entity->Clones = CreateClones(MemorySegment, AsteroidObject, GameState->WorldWidth, GameState->WorldHeight);
+    Entity->CloneSet = CreateClones(MemorySegment, Entity, GameState->WorldWidth, GameState->WorldHeight);
 }
 
 void RepurposeAsteroidEntity(game_entity *Old, game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, game_object_info *NewAsteroidInfo)
@@ -260,7 +270,7 @@ void RepurposeAsteroidEntity(game_entity *Old, game_state *GameState, memory_seg
     Old->Master = NewAsteroidObject;
     Old->IsLive = true;
     Old->Type = NewAsteroidInfo->Type;
-    Old->Clones = CreateClones(MemorySegment, NewAsteroidObject, GameState->WorldWidth, GameState->WorldHeight);
+    Old->CloneSet = CreateClones(MemorySegment, Old, GameState->WorldWidth, GameState->WorldHeight);
 }
 
 void InitializeLaserEntities(game_entity *Lasers, game_state *GameState, memory_segment *MemorySegment, loaded_resource_memory *Resources, game_object_info *GameObjInfo)
@@ -271,7 +281,7 @@ void InitializeLaserEntities(game_entity *Lasers, game_state *GameState, memory_
         Lasers[i].IsLive = true;
         Lasers[i].Master = LaserObject;
         Lasers[i].Type = GameObjInfo->Type;
-        Lasers[i].Clones = CreateClones(MemorySegment, LaserObject, GameState->WorldWidth, GameState->WorldHeight);
+        Lasers[i].CloneSet = CreateClones(MemorySegment, &Lasers[i], GameState->WorldWidth, GameState->WorldHeight);
     }
 }
 
@@ -318,4 +328,71 @@ void KillLaser(game_state *GameState, uint32_t LaserIndex)
     GameState->LaserSet->Lasers[LaserIndex].Master->IsVisible = false;
     GameState->LaserSet->LifeTimers[LaserIndex] = 0;
     GameState->NumSpawnedLasers -= 1;
+}
+
+void HandleEntityEdgeWarping(game_entity *Entity, int ScreenWidth, int ScreenHeight)
+{
+    game_object *Master = Entity->Master;
+    if (Master->Midpoint.X < 0)
+    {
+        Master->Midpoint.X += ScreenWidth;
+        object_clone *Clones = Entity->CloneSet->Clones;
+        for (int i = 0; i < 8; ++i)
+        {
+            Clones[i].ClonedObject->Midpoint.X += ScreenWidth;
+        }
+    }
+    else if (Master->Midpoint.X >= ScreenWidth)
+    {
+        Master->Midpoint.X -= ScreenWidth;
+        object_clone *Clones = Entity->CloneSet->Clones;
+        for (int i = 0; i < 8; ++i)
+        {
+            Clones[i].ClonedObject->Midpoint.X -= ScreenWidth;
+        }
+    }
+    if (Master->Midpoint.Y < 0)
+    {
+        Master->Midpoint.Y += ScreenHeight;
+        object_clone *Clones = Entity->CloneSet->Clones;
+        for (int i = 0; i < 8; ++i)
+        {
+            Clones[i].ClonedObject->Midpoint.Y += ScreenHeight;
+        }
+    }
+    else if (Master->Midpoint.Y >= ScreenHeight)
+    {
+        Master->Midpoint.Y -= ScreenHeight;
+        object_clone *Clones = Entity->CloneSet->Clones;
+        for (int i = 0; i < 8; ++i)
+        {
+            Clones[i].ClonedObject->Midpoint.Y -= ScreenHeight;
+        }
+    }
+}
+
+void UpdateGameEntityMomentumAndAngle(game_state *GameState, vec_2 MomentumDelta, float AngularMomentumDelta)
+{
+    game_object *PlayerMaster = GameState->Player->Master;
+    object_clone *PlayerClones = GameState->Player->CloneSet->Clones;
+
+    PlayerMaster->Momentum = AddVectors(PlayerMaster->Momentum, MomentumDelta);
+    PlayerMaster->OffsetAngle += PlayerMaster->AngularMomentum * AngularMomentumDelta;
+
+    for (uint32_t i = 0; i < NUM_OBJ_CLONES; ++i)
+    {
+        PlayerClones[i].ClonedObject->Momentum = PlayerMaster->Momentum;
+        PlayerClones[i].ClonedObject->OffsetAngle = PlayerMaster->OffsetAngle;
+    }
+
+    game_entity *Asteroids = GameState->SpawnedAsteroids->Asteroids;
+    for (uint32_t i = 0; i < GameState->NumSpawnedAsteroids; ++i)
+    {
+        Asteroids[i].Master->OffsetAngle += Asteroids[i].Master->AngularMomentum;
+        object_clone *AsteroidClones = Asteroids[i].CloneSet->Clones;
+        for (uint32_t j = 0; j < NUM_OBJ_CLONES; ++j)
+        {
+            AsteroidClones[j].ClonedObject->OffsetAngle = Asteroids[i].Master->OffsetAngle;
+        }
+    }
 }

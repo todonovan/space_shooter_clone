@@ -66,28 +66,34 @@ struct game_object_info
 };
 
 // Clones are needed for collision checking at screen boundaries.
-// A clone is simply a ref to an object (for vertex info) and an
-// offset. The clone's position is found by adding the offset to
-// the parent's position.
+// Clones have been reworked to contain a reference to a totally
+// new game object, rather than simply referring to the parent object.
+// This is so clones can be placed in data structures just like their
+// parents. This may be necessary if, for instance, a 'first pass' collision
+// detection sweep is done. Such a pass would certainly result in parent objects
+// being rejected while clones should be included; such an algorithm appears
+// difficult if clones do not contain their own semi-independent game objects.
 
-struct object_clone
-{
-    game_object *Parent;
-    vec_2 *Midpoint;
-};
-
-struct clone_set
-{
-    uint32_t Count;
-    object_clone *Clones;
-};
+struct clone_set; // forward declaration
 
 struct game_entity
 {
     bool IsLive;
     object_type Type;
     game_object *Master;
-    clone_set *Clones;
+    clone_set *CloneSet;
+};
+
+struct object_clone
+{
+    game_entity *ParentEntity;
+    game_object *ClonedObject;
+};
+
+struct clone_set
+{
+    uint32_t Count;
+    object_clone *Clones;
 };
 
 struct asteroid_set
@@ -145,5 +151,6 @@ struct game_permanent_memory
 #define PushToMemorySegment(Segment, type) (type *)AssignToMemorySegment_(Segment, sizeof(type))
 void * AssignToMemorySegment_(memory_segment *Segment, uint32_t Size);
 inline float CalculateVectorDistance(vec_2 P1, vec_2 P2);
+vec_2 AddVectors(vec_2 A, vec_2 B);
 
 #endif // asteroids.h
