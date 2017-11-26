@@ -8,8 +8,9 @@
 
 #include "platform.h"
 #include "asteroids.h"
-#include "collision.h"
+#include "geometry.cpp"
 #include "game_entities.h"
+#include "collision.h"
 
 #include "asteroids.cpp"
 

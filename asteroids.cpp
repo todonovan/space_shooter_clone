@@ -36,24 +36,6 @@
 
 */
 
-inline vec_2 AddVectors(vec_2 V1, vec_2 V2)
-{
-    vec_2 Result;
-    Result.X = V1.X + V2.X;
-    Result.Y = V1.Y + V2.Y;
-
-    return Result;
-}
-
-inline vec_2 ScaleVector(vec_2 V, float S)
-{
-    vec_2 Result;
-    Result.X = V.X * S;
-    Result.Y = V.Y * S;
-
-    return Result;
-}
-
 // Note that this may not be portable, as it relies upon the way Windows structures
 // bitmap data in memory.
 void SetPixelInBuffer(platform_bitmap_buffer *Buffer, vec_2 *Coords, color_triple *Colors)
@@ -123,12 +105,12 @@ void DrawLineSegmentWithWidth(platform_bitmap_buffer *Buffer, vec_2 *StartPoint,
 
 void SetObjectModelForDraw(game_object *Object)
 {
-    object_model *Model = Object->Model;
+    polygon *Poly = Object->Model->Polygon;
     float Theta = Object->OffsetAngle;
-    vec_2 *StartVerts = Model->StartVerts->Verts;
-    vec_2 *DrawVerts = Model->DrawVerts->Verts;
+    vec_2 *StartVerts = Poly->StartVerts->Verts;
+    vec_2 *DrawVerts = Poly->DrawVerts->Verts;
 
-    for (uint32_t i = 0; i < Model->NumVertices; ++i)
+    for (uint32_t i = 0; i < Poly->N; ++i)
     {
         float X_Orig = StartVerts[i].X;
         float Y_Orig = StartVerts[i].Y;
@@ -169,9 +151,10 @@ void DrawObjectModelIntoBuffer(platform_bitmap_buffer *Buffer, game_object *Obje
     int cur = 0, next = 1;
     vec_2 Cur, Next;
     object_model *Model = Object->Model;
-    vert_set *DrawVerts = Model->DrawVerts;
+    polygon *Poly = Model->Polygon;
+    vert_set *DrawVerts = Poly->DrawVerts;
 
-    for (uint32_t i = 0; i < Model->NumVertices - 1; ++i)
+    for (uint32_t i = 0; i < Poly->N - 1; ++i)
     {
         Cur.X = DrawVerts->Verts[cur].X + Object->Midpoint.X;
         Cur.Y = DrawVerts->Verts[cur].Y + Object->Midpoint.Y;
@@ -179,7 +162,7 @@ void DrawObjectModelIntoBuffer(platform_bitmap_buffer *Buffer, game_object *Obje
         Next.Y = DrawVerts->Verts[next].Y + Object->Midpoint.Y;
         DrawLineSegmentWithWidth(Buffer, &Cur, &Next, &Model->Color, Model->LineWidth);
         ++cur;
-        if (i < Model->NumVertices - 2) ++next;
+        if (i < Poly->N - 2) ++next;
     }
     if (Object->Type != LASER)
     {
@@ -205,12 +188,6 @@ void * AssignToMemorySegment_(memory_segment *Segment, uint32_t Size)
     void *Result = Segment->BaseStorageLocation + Segment->Used;
     Segment->Used += Size;
     return Result;
-}
-
-inline float CalculateVectorDistance(vec_2 P1, vec_2 P2)
-{
-    float d = sqrtf(((P2.X - P1.X) * (P2.X - P1.X)) + ((P2.Y - P1.Y) * (P2.Y - P1.Y)));
-    return d;
 }
 
 void TriggerEndGame()
@@ -318,7 +295,7 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     // memory siloed allows for clean 'reset' of certain memory chunks when, e.g., a level transition occurs.
     // Additionally, having such silos allows for, e.g., laser memory to be handled differently from asteroid memory.
     // The various listed memory sizes are rough estimates (with the exception of PERM_STORAGE_STRUCT_SIZE),
-    // and are certainly overkill in some cases.
+    // and are currently overkill in most cases.
     
     // As the game loop performs a cold cast of the perm memory passed to it by the game layer (to game_permanent_memory),
     // we have to first account for the size of this struct before beginning the silo process.
@@ -366,7 +343,7 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     GameState->WorldWidth = BufferWidth;
     GameState->WorldHeight = BufferHeight;    
 
-    // The game_entity struct combines the underlying game_object itself, the type of the object, a boolean stating
+    // The game_entity struct combines the underlying game_object itself, the 'type' of the object, a boolean stating
     // whether the object is live (for memory cleaning purposes), and the set of object clones needed for
     // collision detection -- specifically, detection at the screen borders to account for screen wrapping.
     // Creation of an entity makes use of a game_object_info struct. Said struct need not be fully detailed
@@ -394,9 +371,9 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     InitializePlayer(GameState->Player, GameState, &GamePermMemory->SceneMemorySegment, ResourceMemory, &PlayerInfo);
 
     // No asteroids are spawned at game startup, but instead at level startup, which occurs later in the process.
-    GameState->NumSpawnedAsteroids = 0;
 
-    ////// TODO !! Next step is to change the asteroid system into an entity-based system.
+    GameState->MaxNumAsteroids = MAX_NUM_SPAWNED_ASTEROIDS;
+    GameState->NumSpawnedAsteroids = 0;
     GameState->SpawnedAsteroids = PushToMemorySegment(&GamePermMemory->AsteroidMemorySegment, asteroid_set);
     GameState->SpawnedAsteroids->Asteroids = PushArrayToMemorySegment(&GamePermMemory->AsteroidMemorySegment, MAX_NUM_SPAWNED_ASTEROIDS, game_entity);
     
@@ -413,7 +390,7 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     Memory->IsInitialized = true;
 }
 
-void HandleControllerInput(platform_player_input *Input, game_state *GameState, game_permanent_memory *GameMemory, loaded_resource_memory *Resources)
+void HandleControllerInput(platform_player_input *Input, game_state *GameState, game_permanent_memory *GamePermMemory, loaded_resource_memory *Resources)
 {
     if (Input->Start_Pressed)
     {
@@ -421,7 +398,26 @@ void HandleControllerInput(platform_player_input *Input, game_state *GameState, 
     }
     if (Input->B_Pressed && !Input->B_Was_Pressed)
     {
-        if (GameState->NumSpawnedLasers < GameState->MaxNumLasers) FireLaser(GameState, &GameMemory->LaserMemorySegment, Resources, GameState->Player);
+        if (GameState->NumSpawnedLasers < GameState->MaxNumLasers) FireLaser(GameState, &GamePermMemory->LaserMemorySegment, Resources, GameState->Player);
+    }
+    
+    if (Input->A_Pressed && !Input->A_Was_Pressed)
+    {
+        game_object_info NewAstInfo = {};
+        NewAstInfo.Midpoint.X = (float) (rand() % GameState->WorldWidth);
+        NewAstInfo.Midpoint.Y = (float) (rand() % GameState->WorldHeight);
+        NewAstInfo.Momentum.X = 10000.0f / ((float) rand());
+        NewAstInfo.Momentum.Y = 10000.0f / ((float) rand());
+        NewAstInfo.AngularMomentum = 100.0f / ((float) rand());
+        NewAstInfo.InitVisible = true;
+        NewAstInfo.NewEntity = true;
+        
+        int astIndex = rand() % 3;
+        if (astIndex == 0) NewAstInfo.Type = ASTEROID_SMALL;
+        else if (astIndex == 1) NewAstInfo.Type = ASTEROID_MEDIUM;
+        else NewAstInfo.Type = ASTEROID_LARGE;
+
+        InitializeAsteroidEntity(GameState, &GamePermMemory->AsteroidMemorySegment, Resources, &NewAstInfo);
     }
 
     vec_2 MomentumAdjustment = {};
@@ -449,32 +445,6 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
     game_object *Player = PlayerEntity->Master;
     object_model *PlayerModel = Player->Model;
 
-    if (PlayerInput->Start_Pressed)
-    {
-        PostQuitMessage(0);
-    }
-    /*if (PlayerInput->A_Pressed && !PlayerInput->A_Was_Pressed)
-    {
-        int astIndex = rand() % 3;
-        int X = rand() % OffscreenBuffer->Width;
-        int Y = rand() % OffscreenBuffer->Height;
-        switch (astIndex)
-        {
-            case 0:
-            {
-                SpawnAsteroid(GameState, &GamePermMemory->SceneMemorySegment, LoadedResources, ASTEROID_SMALL, (float)X, (float)Y, -.25f, -1.0f, .005f);
-            } break;
-            case 1:
-            {
-                SpawnAsteroid(GameState, &GamePermMemory->SceneMemorySegment, LoadedResources, ASTEROID_MEDIUM, (float)X, (float)Y, -.25f, -1.0f, .005f);
-            } break;
-            case 2:
-            {
-                SpawnAsteroid(GameState, &GamePermMemory->SceneMemorySegment, LoadedResources, ASTEROID_LARGE, (float)X, (float)Y, -.25f, -1.0f, .005f);
-            } break;
-        }
-    }*/
-
     HandleControllerInput(PlayerInput, GameState, GamePermMemory, LoadedResources);
 
     game_entity *Asteroids = GameState->SpawnedAsteroids->Asteroids;
@@ -485,9 +455,7 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
     for (uint32_t i = 0; i < GameState->NumSpawnedAsteroids; ++i)
     {
         game_object *CurAsteroid = GameState->SpawnedAsteroids->Asteroids[i].Master;
-        bool collision = CheckCollision(&PlayerDesiredEnd, Player, &CurAsteroid->Midpoint, CurAsteroid);
-
-        if (collision && CurAsteroid->IsVisible)
+        if (CheckIfCollision(GameState, Player, CurAsteroid, LoadedResources))
         {
             HandleCollision(GameState, LoadedResources, Player, CurAsteroid);
         }
@@ -512,9 +480,9 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
 
     for (uint32_t i = 0; i < GameState->MaxNumLasers; ++i)
     {
+        game_entity *CurrentLaser = &GameState->LaserSet->Lasers[i];
         if (GameState->LaserSet->LifeTimers[i] > 0)
-        {
-            game_entity *CurrentLaser = &GameState->LaserSet->Lasers[i];
+        {    
             CurrentLaser->Master->Midpoint = AddVectors(CurrentLaser->Master->Midpoint, CurrentLaser->Master->Momentum);
             for (uint32_t j = 0; j < NUM_OBJ_CLONES; ++j)
             {
@@ -523,18 +491,17 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
             }
             GameState->LaserSet->LifeTimers[i] -= 1;
         }
-        else if (GameState->LaserSet->Lasers[i].Master->IsVisible && GameState->LaserSet->LifeTimers[i] == 0)
+        else if (CurrentLaser->Master->IsVisible && GameState->LaserSet->LifeTimers[i] == 0)
         {
             KillLaser(GameState, i);
         }
 
         for (uint32_t a = 0; a < GameState->NumSpawnedAsteroids; ++a)
         {
-            game_object *CurAsteroid = GameState->SpawnedAsteroids->Asteroids[a].Master;
-            bool collision = CheckCollision(&GameState->LaserSet->Lasers[i].Master->Midpoint, GameState->LaserSet->Lasers[i].Master, &CurAsteroid->Midpoint, CurAsteroid);
-            if (collision && CurAsteroid->IsVisible && GameState->LaserSet->Lasers[i].Master->IsVisible)
+            game_object *CurrentAsteroidMaster = GameState->SpawnedAsteroids->Asteroids[a].Master;
+            if (CheckIfCollision(GameState, CurrentLaser->Master, CurrentAsteroidMaster, LoadedResources))
             {
-                HandleCollision(GameState, LoadedResources, GameState->LaserSet->Lasers[i].Master, CurAsteroid, i);
+                HandleCollision(GameState, LoadedResources, CurrentLaser->Master, CurrentAsteroidMaster);
             }
         }
     }

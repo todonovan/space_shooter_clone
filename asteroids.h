@@ -5,11 +5,14 @@
 #include <stdint.h>
 
 #include "platform.h"
+#include "geometry.h"
 
-struct vec_2
+
+// Simple rect struct, useful for AABBs
+struct game_rect
 {
-    float X;
-    float Y;
+    vec_2 TopLeft;
+    vec_2 BotRight;
 };
 
 struct color_triple
@@ -17,11 +20,6 @@ struct color_triple
     uint8_t Red;
     uint8_t Blue;
     uint8_t Green;
-};
-
-struct vert_set
-{
-    vec_2 *Verts;
 };
 
 typedef enum object_type
@@ -35,9 +33,7 @@ typedef enum object_type
 
 struct object_model
 {
-    uint32_t NumVertices;
-    vert_set *StartVerts;
-    vert_set *DrawVerts;
+    polygon *Polygon;
     color_triple Color;
     float LineWidth;
 };
@@ -112,6 +108,7 @@ struct game_state
     int WorldWidth;
     int WorldHeight;
     game_entity *Player;
+    uint32_t MaxNumAsteroids;
     uint32_t NumSpawnedAsteroids;
     asteroid_set *SpawnedAsteroids;
     uint32_t MaxNumLasers;

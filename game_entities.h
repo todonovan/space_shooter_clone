@@ -1,8 +1,7 @@
 #ifndef GAME_ENTITIES_H
 #define GAME_ENTITIES_H
 
-#include <windows.h>
-#include <stdint.h>
+#include "geometry.h"
 
 #define NUM_OBJ_CLONES 8
 
