@@ -1,40 +1,14 @@
 #include <windows.h>
-#include <stdint.h>
-#include <math.h>
 #include <xinput.h>
-#include <stdlib.h>
+
 
 #include "platform.h"
+#include "input.cpp"
 #include "asteroids.h"
-#include "game_entities.h"
-#include "collision.h"
-
+#include "geometry.cpp"
 #include "game_entities.cpp"
 #include "collision.cpp"
 
-/* Thoughts...
-    - Do I need some sort of 'entity' system?
-    - How will I keep track of "spawned" / alive entities w/ my memory model?
-    - This will be important for collision detection, etc.
-    - Speaking of which, how will collision detection be done?
-    - Use pairwise (for each vector in model) line/line intersection between close objects to determine if collision occurs
-    - How to determine 'closeness' of objects? One way is to do a radius check
-    - Note also that 'lines' may cross the screen boundaries
-    - May need to transition "draw vertices" away from a simple copy of start vertices w/ rotation applied, to a different structure
-    - A procedure to generate draw vertices could start at Vert[0], then check Vert[1]; if a boundary cross occurs, then instead of
-        simply moving on to Vert[1], add two intermediary vertices -- one on each side of the screen boundary
-    - So if a screen-crossing occurs between RawVert[0] and RawVert[1], the draw verts might look like:
-        DrawVert[0] = RawVert[0]
-        DrawVert[1] = ScreenBoundary1
-        DrawVert[2] = ScreenBoundary2
-        DrawVert[3] = RawVert[1]
-    - Note that some concept of a screen boundary would have to be added to draw code to ensure the proc doesn't try to draw a line connecting
-        the two screen boundaries
-    - Perhaps DrawVert is a separate struct, with a member that states whether the vert occurs on a screen boundary
-
-    - May have to ACTUALLY split up DrawVerts, CollidingVerts, etc.
-
-*/
 
 // Note that this may not be portable, as it relies upon the way Windows structures
 // bitmap data in memory.
@@ -252,35 +226,35 @@ void LoadResources(memory_segment *ResourceMemorySegment, loaded_resource_memory
 
     // Player
     DWORD SizeToRead = (DWORD)(sizeof(vec_2) * PLAYER_NUM_VERTICES);
-    if (!ReadFileIntoBuffer("C:/Asteroids/build/Debug/player_vertices.dat", (void *)Resources->PlayerVertices, SizeToRead))
+    if (!ReadFileIntoBuffer((LPCTSTR)"C:/Asteroids/build/Debug/player_vertices.dat", (void *)Resources->PlayerVertices, SizeToRead))
     {
         HackyAssert(false);
     }
 
     // Small
     SizeToRead = (DWORD)(sizeof(vec_2) * SMALL_ASTEROID_NUM_VERTICES);
-    if (!ReadFileIntoBuffer("C:/Asteroids/build/Debug/sm_ast_vertices.dat", (void *)Resources->SmallAsteroidVertices, SizeToRead))
+    if (!ReadFileIntoBuffer((LPCTSTR)"C:/Asteroids/build/Debug/sm_ast_vertices.dat", (void *)Resources->SmallAsteroidVertices, SizeToRead))
     {
         HackyAssert(false);
     }
 
     // Medium
     SizeToRead = (DWORD)(sizeof(vec_2) * MEDIUM_ASTEROID_NUM_VERTICES);
-    if (!ReadFileIntoBuffer("C:/Asteroids/build/Debug/med_ast_vertices.dat", (void *)Resources->MediumAsteroidVertices, SizeToRead))
+    if (!ReadFileIntoBuffer((LPCTSTR)"C:/Asteroids/build/Debug/med_ast_vertices.dat", (void *)Resources->MediumAsteroidVertices, SizeToRead))
     {
         HackyAssert(false);
     }
 
     // Large
     SizeToRead = (DWORD)(sizeof(vec_2) * LARGE_ASTEROID_NUM_VERTICES);
-    if (!ReadFileIntoBuffer("C:/Asteroids/build/Debug/lg_ast_vertices.dat", (void *)Resources->LargeAsteroidVertices, SizeToRead))
+    if (!ReadFileIntoBuffer((LPCTSTR)"C:/Asteroids/build/Debug/lg_ast_vertices.dat", (void *)Resources->LargeAsteroidVertices, SizeToRead))
     {
         HackyAssert(false);
     }
 
     // Laser
     SizeToRead = (DWORD)(sizeof(vec_2) * LASER_NUM_VERTICES);
-    if (!ReadFileIntoBuffer("C:/Asteroids/build/Debug/laser_vertices.dat", (void *)Resources->LaserVertices, SizeToRead))
+    if (!ReadFileIntoBuffer((LPCTSTR)"C:/Asteroids/build/Debug/laser_vertices.dat", (void *)Resources->LaserVertices, SizeToRead))
     {
         HackyAssert(false);
     }
@@ -341,7 +315,9 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     
     game_state *GameState = GamePermMemory->GameState;
     GameState->WorldWidth = BufferWidth;
-    GameState->WorldHeight = BufferHeight;    
+    GameState->WorldHeight = BufferHeight;
+    InitializePlayerInput(&GameState->Controller);
+    GameState->EntityCount = 0;    
 
     // The game_entity struct combines the underlying game_object itself, the 'type' of the object, a boolean stating
     // whether the object is live (for memory cleaning purposes), and the set of object clones needed for
@@ -390,18 +366,19 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     Memory->IsInitialized = true;
 }
 
-void HandleControllerInput(platform_player_input *Input, game_state *GameState, game_permanent_memory *GamePermMemory, loaded_resource_memory *Resources)
+void HandleControllerInput(game_state *GameState, game_permanent_memory *GamePermMemory, loaded_resource_memory *Resources)
 {
-    if (Input->Start_Pressed)
+    asteroids_player_input *Input = &GameState->Controller;
+    if (Input->Start_DownThisFrame)
     {
         PostQuitMessage(0);
     }
-    if (Input->B_Pressed && !Input->B_Was_Pressed)
+    if (Input->B_DownThisFrame)
     {
         if (GameState->NumSpawnedLasers < GameState->MaxNumLasers) FireLaser(GameState, &GamePermMemory->LaserMemorySegment, Resources, GameState->Player);
     }
     
-    if (Input->A_Pressed && !Input->A_Was_Pressed)
+    if (Input->A_DownThisFrame)
     {
         game_object_info NewAstInfo = {};
         NewAstInfo.Midpoint.X = (float) (rand() % GameState->WorldWidth);
@@ -425,12 +402,11 @@ void HandleControllerInput(platform_player_input *Input, game_state *GameState, 
     // Note: This procedure currently gives bad control feel; must be reworked.
     //AdjustMomentumValuesAgainstMax(Player, PlayerInput->NormalizedLX * PlayerInput->Magnitude,
     //                              PlayerInput->NormalizedLY * PlayerInput->Magnitude);
-    MomentumAdjustment.X = Input->NormalizedLX * Input->Magnitude * 0.8f;
-    MomentumAdjustment.Y = Input->NormalizedLY * Input->Magnitude * 0.8f;
+    MomentumAdjustment = ScaleVector(Input->LeftStick.StickVector_Normalized, (Input->LeftStick.Magnitude * 0.8f));
     UpdateGameEntityMomentumAndAngle(GameState, MomentumAdjustment, (Input->LTrigger + Input->RTrigger));    
 }
 
-void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenBuffer, platform_sound_buffer *SoundBuffer, platform_player_input *PlayerInput)
+void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenBuffer, platform_sound_buffer *SoundBuffer, platform_player_input *InputThisFrame, platform_player_input *InputLastFrame)
 {
     game_permanent_memory *GamePermMemory = (game_permanent_memory *)Memory->PermanentStorage;
     if (!Memory->IsInitialized)
@@ -442,10 +418,15 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
     game_state *GameState = GamePermMemory->GameState;
     loaded_resource_memory *LoadedResources = GamePermMemory->Resources;
     game_entity *PlayerEntity = GameState->Player;
+    asteroids_player_input Last_Cntrl;
+    asteroids_player_input *This_Cntrl = &GameState->Controller;
+
     game_object *Player = PlayerEntity->Master;
     object_model *PlayerModel = Player->Model;
 
-    HandleControllerInput(PlayerInput, GameState, GamePermMemory, LoadedResources);
+    TranslatePlatformInputToGame(This_Cntrl, InputThisFrame, &Last_Cntrl);
+
+    HandleControllerInput(GameState, GamePermMemory, LoadedResources);
 
     game_entity *Asteroids = GameState->SpawnedAsteroids->Asteroids;
     vec_2 PlayerDesiredEnd = AddVectors(Player->Midpoint, Player->Momentum);
@@ -454,10 +435,10 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
     // Collision handling
     for (uint32_t i = 0; i < GameState->NumSpawnedAsteroids; ++i)
     {
-        game_object *CurAsteroid = GameState->SpawnedAsteroids->Asteroids[i].Master;
-        if (CheckIfCollision(GameState, Player, CurAsteroid, LoadedResources))
+        game_entity *CurAsteroid = &GameState->SpawnedAsteroids->Asteroids[i];
+        if (CheckCollisionEntities(PlayerEntity, CurAsteroid))
         {
-            HandleCollision(GameState, LoadedResources, Player, CurAsteroid);
+            HandleCollision(GameState->Player, CurAsteroid, GameState, LoadedResources, GamePermMemory, 0);
         }
     }
 
@@ -493,15 +474,15 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
         }
         else if (CurrentLaser->Master->IsVisible && GameState->LaserSet->LifeTimers[i] == 0)
         {
-            KillLaser(GameState, i);
+            KillLaser(GameState, CurrentLaser);
         }
 
         for (uint32_t a = 0; a < GameState->NumSpawnedAsteroids; ++a)
         {
-            game_object *CurrentAsteroidMaster = GameState->SpawnedAsteroids->Asteroids[a].Master;
-            if (CheckIfCollision(GameState, CurrentLaser->Master, CurrentAsteroidMaster, LoadedResources))
+            game_entity *CurrentAsteroid = &GameState->SpawnedAsteroids->Asteroids[a];
+            if (CheckCollisionEntities(CurrentLaser, CurrentAsteroid))
             {
-                HandleCollision(GameState, LoadedResources, CurrentLaser->Master, CurrentAsteroidMaster);
+                HandleCollision(CurrentLaser, CurrentAsteroid, GameState, LoadedResources, GamePermMemory, i);
             }
         }
     }

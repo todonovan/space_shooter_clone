@@ -1,6 +1,7 @@
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
+#include <stdint.h>
 #include <windows.h>
 #include <DSound.h>
 
@@ -16,36 +17,6 @@
 
 #define GAME_PERM_MEMORY_SIZE Megabytes(256)
 #define GAME_TRANSIENT_MEMORY_SIZE Megabytes(1024)
-
-#define PLAYER_NUM_VERTICES 4
-#define PLAYER_LINE_WIDTH 2.0f
-#define PLAYER_RED 200
-#define PLAYER_GREEN 200
-#define PLAYER_BLUE 200
-#define PLAYER_ANGULAR_MOMENTUM 0.05f
-#define PLAYER_MAX_MOMENTUM 30.0f
-
-#define LARGE_ASTEROID_NUM_VERTICES 8
-#define MEDIUM_ASTEROID_NUM_VERTICES 6
-#define SMALL_ASTEROID_NUM_VERTICES 4
-
-#define ASTEROID_LINE_WIDTH 1.5f
-#define ASTEROID_RED 125
-#define ASTEROID_GREEN 125
-#define ASTEROID_BLUE 125
-
-#define MAX_NUM_SPAWNED_ASTEROIDS 98 // Each large asteroid results in 7 total asteroids spawning; 98 gives max of 14 large asteroids
-
-#define LASER_LINE_WIDTH 1.0f
-#define LASER_NUM_VERTICES 2
-#define LASER_RED 163
-#define LASER_GREEN 42
-#define LASER_BLUE 21
-
-#define MAX_NUM_SPAWNED_LASERS 5
-
-#define LASER_SPEED_MAG 25.0f
-#define LASER_SPAWN_TIMER 77
 
 
 struct platform_bitmap_buffer
@@ -73,15 +44,16 @@ struct platform_sound_buffer
 
 struct platform_player_input
 {
-    float Magnitude;
-    float NormalizedLX;
-    float NormalizedLY;
+    float LX;
+    float LY;
+    uint32_t StickDeadzone;
+    uint32_t MaxMagnitude;
     bool A_Pressed;
-    bool A_Was_Pressed;
     bool B_Pressed;
-    bool B_Was_Pressed;
     float LTrigger;
     float RTrigger;
+    float TriggerDeadzone;
+    float TriggerMax;
     bool Start_Pressed;
 };
 

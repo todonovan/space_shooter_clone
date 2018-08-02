@@ -1,17 +1,11 @@
 #include <windows.h>
-#include <stdint.h>
 #include <stdio.h>
-#include <math.h>
 #include <xinput.h>
 #include <dsound.h>
 #include <tchar.h>
+#include <stdint.h>
 
-#include "platform.h"
-#include "asteroids.h"
-#include "geometry.cpp"
-#include "game_entities.h"
-#include "collision.h"
-
+#include "common.h"
 #include "asteroids.cpp"
 
 struct internal_game_window
@@ -80,59 +74,15 @@ platform_player_input GetPlayerInput(DWORD ControllerNumber, platform_player_inp
 
     if (XInputGetState(ControllerNumber, &ControllerState) == ERROR_SUCCESS)
     {
-        float LX = ControllerState.Gamepad.sThumbLX;
-        float LY = ControllerState.Gamepad.sThumbLY;
-        float magnitude = sqrtf((LX * LX) + (LY * LY));
-        PlayerInput.NormalizedLX = LX / magnitude;
-        PlayerInput.NormalizedLY = LY / magnitude;
-
-        float normalizedMagnitude = 0.0f;
-        if (magnitude > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE)
-        {
-            if (magnitude > 32767)
-            {
-                magnitude = 32767;
-            }
-            magnitude -= XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE;
-            normalizedMagnitude = magnitude / (32767 - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
-        }
-        else
-        {
-            magnitude = 0.0f;
-            normalizedMagnitude = 0.0f;
-        }
-
-        PlayerInput.Magnitude = normalizedMagnitude;
-
-		uint8_t leftTrig = (ControllerState.Gamepad.bLeftTrigger > 50) ? ControllerState.Gamepad.bLeftTrigger : 0;
-		uint8_t rightTrig = (ControllerState.Gamepad.bRightTrigger > 50) ? ControllerState.Gamepad.bRightTrigger : 0;
-
-		float normalizedLeftTrig, normalizedRightTrig;
-
-		if (leftTrig > 0)
-		{
-			normalizedLeftTrig = ((float)leftTrig - 50.0f) / (255.0f - 50.0f);
-		}
-		else
-		{
-			normalizedLeftTrig = 0.0f;
-		}
-
-		if (rightTrig > 0)
-		{
-			normalizedRightTrig = -1.0f * (((float)rightTrig - 50.0f) / (255.0f - 50.0f));
-		}
-		else
-		{
-			normalizedRightTrig = 0.0f;
-		}
-
+        PlayerInput.LX = ControllerState.Gamepad.sThumbLX;
+        PlayerInput.LY = ControllerState.Gamepad.sThumbLY;
+        PlayerInput.StickDeadzone = XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE;
+        PlayerInput.MaxMagnitude = 32767;
+		PlayerInput.LTrigger = ControllerState.Gamepad.bLeftTrigger;
+		PlayerInput.RTrigger = ControllerState.Gamepad.bRightTrigger;
+        PlayerInput.TriggerDeadzone = 50;
         PlayerInput.A_Pressed = (ControllerState.Gamepad.wButtons & XINPUT_GAMEPAD_A);
-        PlayerInput.A_Was_Pressed = LastInputState->A_Pressed;
         PlayerInput.B_Pressed = (ControllerState.Gamepad.wButtons & XINPUT_GAMEPAD_B);
-        PlayerInput.B_Was_Pressed = LastInputState->B_Pressed;
-		PlayerInput.LTrigger = normalizedLeftTrig * 1.25f;
-		PlayerInput.RTrigger = normalizedRightTrig * 1.25f;
         PlayerInput.Start_Pressed = (ControllerState.Gamepad.wButtons & XINPUT_GAMEPAD_START);
     }
 
@@ -217,7 +167,7 @@ void FillSoundBuffer(DWORD ByteToLock, DWORD BytesToWrite)
 }
 
 // Returns true if read was successful, false otherwise
-bool ReadFileIntoBuffer(LPCTSTR FileName, void *Buffer, DWORD BytesToRead)
+bool ReadFileIntoBuffer(LPCSTR FileName, void *Buffer, DWORD BytesToRead)
 {
     DWORD NumBytesRead = 0;
     HANDLE File = CreateFileA(FileName, GENERIC_READ, 0, 0, OPEN_EXISTING, 0, 0);
@@ -235,7 +185,7 @@ bool ReadFileIntoBuffer(LPCTSTR FileName, void *Buffer, DWORD BytesToRead)
 
 // Returns true if the write was successful, false otherwise
 // Note that calling this function will truncate the associated file
-bool WriteBufferIntoFile(LPCTSTR FileName, void *Buffer, DWORD BytesToWrite)
+bool WriteBufferIntoFile(LPCSTR FileName, void *Buffer, DWORD BytesToWrite)
 {
     DWORD NumBytesWritten = 0;
     HANDLE File = CreateFileA(FileName, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
@@ -384,7 +334,7 @@ int CALLBACK WinMain(HINSTANCE Instance,
 
             // Initial input retrieval.
             platform_player_input LastInput = {};
-            platform_player_input CurrentInput = GetPlayerInput(0, &LastInput);
+            platform_player_input CurrentInput = {};
 
 
             /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
@@ -424,7 +374,7 @@ int CALLBACK WinMain(HINSTANCE Instance,
                 ClearOffscreenBuffer();
                 LastInput = CurrentInput;
                 CurrentInput = GetPlayerInput(0, &LastInput);
-                UpdateGameAndRender(&GameMemory, &GlobalBackbuffer, &GlobalSoundBuffer, &CurrentInput);
+                UpdateGameAndRender(&GameMemory, &GlobalBackbuffer, &GlobalSoundBuffer, &CurrentInput, &LastInput);
                 HDC WindowDC = GetDC(WindowHandle);
                 DrawToWindow(WindowDC);
                 ReleaseDC(WindowHandle, WindowDC);

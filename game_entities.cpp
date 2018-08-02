@@ -1,11 +1,8 @@
-#include <stdint.h>
-#include <math.h>
+#ifndef GAME_ENTITIES_CPP
+#define GAME_ENTITIES_CPP
 
-#include "platform.h"
-#include "asteroids.h"
-#include "geometry.h"
+#include "common.h"
 #include "game_entities.h"
-#include "collision.h"
 
 inline void SetVertValue(vec_2 *Vert, float XVal, float YVal)
 {
@@ -248,6 +245,8 @@ void InitializePlayer(game_entity *Player, game_state *GameState, memory_segment
 {
     game_object *PlayerObject = SpawnPlayerObject(GameState, MemorySegment, Resources, GameObjInfo);
     Player->IsLive = true;
+    Player->Index = GameState->EntityCount;
+    GameState->EntityCount += 1;
     Player->Type = GameObjInfo->Type;
     Player->Master = PlayerObject;
     Player->CloneSet = CreateClones(MemorySegment, Player, GameState->WorldWidth, GameState->WorldHeight);
@@ -258,6 +257,8 @@ void InitializeAsteroidEntity(game_state *GameState, memory_segment *MemorySegme
     game_object *AsteroidObject = SpawnAsteroidObject(GameState, MemorySegment, Resources, NewAsteroidInfo);
     game_entity *AsteroidEntity = &GameState->SpawnedAsteroids->Asteroids[GameState->NumSpawnedAsteroids];
     AsteroidEntity->IsLive = true;
+    AsteroidEntity->Index = GameState->EntityCount;
+    GameState->EntityCount += 1;
     AsteroidEntity->Master = AsteroidObject;
     AsteroidEntity->Type = NewAsteroidInfo->Type;
     AsteroidEntity->CloneSet = CreateClones(MemorySegment, AsteroidEntity, GameState->WorldWidth, GameState->WorldHeight);
@@ -279,6 +280,8 @@ void InitializeLaserEntities(game_entity *Lasers, game_state *GameState, memory_
     {
         game_object *LaserObject = SpawnLaserObject(GameState, MemorySegment, Resources, GameObjInfo);
         Lasers[i].IsLive = true;
+        Lasers[i].Index = GameState->EntityCount;
+        GameState->EntityCount += 1;
         Lasers[i].Master = LaserObject;
         Lasers[i].Type = GameObjInfo->Type;
         Lasers[i].CloneSet = CreateClones(MemorySegment, &Lasers[i], GameState->WorldWidth, GameState->WorldHeight);
@@ -299,6 +302,8 @@ void FireLaser(game_state *GameState, memory_segment *LaserMemSegment, loaded_re
 
     game_entity *NewLaserEntity = &LaserSet->Lasers[LaserIndex];
     game_object *NewLaser = NewLaserEntity->Master;
+
+    NewLaserEntity->IsLive = true;
     
 
     float mag = LASER_SPEED_MAG;
@@ -323,10 +328,15 @@ void FireLaser(game_state *GameState, memory_segment *LaserMemSegment, loaded_re
     GameState->NumSpawnedLasers += 1;
 }
 
-void KillLaser(game_state *GameState, uint32_t LaserIndex)
+void KillLaser(game_state *GameState, game_entity *Laser)
 {
-    GameState->LaserSet->Lasers[LaserIndex].Master->IsVisible = false;
-    GameState->LaserSet->LifeTimers[LaserIndex] = 0;
+    uint32_t i = 0;
+    while (GameState->LaserSet->Lasers[i].Index != Laser->Index) i++;
+
+    Laser->IsLive = false;
+    Laser->Master->IsVisible = false;
+
+    GameState->LaserSet->LifeTimers[i] = 0;
     GameState->NumSpawnedLasers -= 1;
 }
 
@@ -396,3 +406,7 @@ void UpdateGameEntityMomentumAndAngle(game_state *GameState, vec_2 MomentumDelta
         }
     }
 }
+
+
+
+#endif

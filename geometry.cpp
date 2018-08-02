@@ -1,6 +1,9 @@
-#include <math.h>
-#include "asteroids.h"
+#ifndef GEOMETRY_CPP
+#define GEOMETRY_CPP
+
+#include "common.h"
 #include "geometry.h"
+
 
 vec_2 AddVectors(vec_2 V1, vec_2 V2)
 {
@@ -32,6 +35,11 @@ vec_2 GetDir(vec_2 V1, vec_2 V2)
 float Dot(vec_2 A, vec_2 B)
 {
     return (A.X * B.X) + (A.Y * B.Y); 
+}
+
+float Magnitude(vec_2 A)
+{
+    return sqrtf((A.X * A.X) + (A.Y * A.Y));
 }
 
 vec_2 Normalize(vec_2 A)
@@ -152,3 +160,5 @@ bool SeparatingAxisTest(polygon *A, polygon *B)
 
     return true;
 }
+
+#endif

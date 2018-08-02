@@ -1,11 +1,6 @@
 #ifndef GEOMETRY_H
 #define GEOMETRY_H
 
-
-#include <math.h>
-#include "asteroids.h"
-#include "geometry.h"
-
 struct vec_2
 {
     float X;
@@ -37,6 +32,8 @@ vec_2 ScaleVector(vec_2 V, float S);
 vec_2 GetDir(vec_2 V1, vec_2 V2);
 
 float Dot(vec_2 A, vec_2 B);
+
+float Magnitude(vec_2 A);
 
 vec_2 Normalize(vec_2 A);
 
