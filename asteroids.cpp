@@ -93,31 +93,6 @@ void SetObjectModelForDraw(game_object *Object)
     }
 }
 
-// TODO: This proc just doesn't feel right when moving the player ship. Will have to revise.
-// Will go back to unchecked top speed for now.
-/*void AdjustMomentumValuesAgainstMax(game_object *Object, float Input_X, float Input_Y)
-{
-    float raw_x = Object->X_Momentum + Input_X;
-    float raw_y = Object->Y_Momentum + Input_Y;
-    float magnitude = sqrt((raw_x * raw_x) + (raw_y * raw_y));
-    if (magnitude > Object->MaxMomentum)
-    {
-        float ratio_x = raw_x / magnitude;
-        float ratio_y = raw_y / magnitude;
-        float adjusted_x_momentum = Object->MaxMomentum * ratio_x;
-        float adjusted_y_momentum = Object->MaxMomentum * ratio_y;
-
-        Object->X_Momentum = adjusted_x_momentum;
-        Object->Y_Momentum =  adjusted_y_momentum;
-    }
-    else
-    {
-        Object->X_Momentum = raw_x;
-        Object->Y_Momentum = raw_y;
-    }
-}
-*/
-
 void DrawObjectModelIntoBuffer(platform_bitmap_buffer *Buffer, game_object *Object)
 {
     if (!(Buffer->Memory)) return;
