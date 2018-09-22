@@ -3,7 +3,7 @@
 
 
 #include "platform.h"
-#include "input.cpp"
+#include "input.h"
 #include "asteroids.h"
 #include "geometry.cpp"
 #include "game_entities.cpp"
@@ -316,7 +316,8 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     game_state *GameState = GamePermMemory->GameState;
     GameState->WorldWidth = BufferWidth;
     GameState->WorldHeight = BufferHeight;
-    InitializePlayerInput(&GameState->Controller);
+    GameState->Input = PushToMemorySegment(&GamePermMemory->PermMemSegment, asteroids_player_input);
+    InitializePlayerInput(GameState->Input);
     GameState->EntityCount = 0;    
 
     // The game_entity struct combines the underlying game_object itself, the 'type' of the object, a boolean stating
@@ -368,7 +369,7 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
 
 void HandleControllerInput(game_state *GameState, game_permanent_memory *GamePermMemory, loaded_resource_memory *Resources)
 {
-    asteroids_player_input *Input = &GameState->Controller;
+    asteroids_player_input *Input = GameState->Input;
     if (Input->Start_DownThisFrame)
     {
         PostQuitMessage(0);
@@ -418,13 +419,24 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
     game_state *GameState = GamePermMemory->GameState;
     loaded_resource_memory *LoadedResources = GamePermMemory->Resources;
     game_entity *PlayerEntity = GameState->Player;
-    asteroids_player_input Last_Cntrl;
-    asteroids_player_input *This_Cntrl = &GameState->Controller;
-
     game_object *Player = PlayerEntity->Master;
     object_model *PlayerModel = Player->Model;
 
-    TranslatePlatformInputToGame(This_Cntrl, InputThisFrame, &Last_Cntrl);
+    asteroids_player_input Last_Input
+    {
+        GameState->Input->A_Down,
+        GameState->Input->A_DownThisFrame,
+        GameState->Input->B_Down,
+        GameState->Input->B_DownThisFrame,
+        GameState->Input->Start_Down,
+        GameState->Input->Start_DownThisFrame,
+        GameState->Input->LTrigger,
+        GameState->Input->RTrigger,
+        GameState->Input->LeftStick,
+        GameState->Input->LeftStickHistory
+    };
+
+    TranslatePlatformInputToGame(GameState->Input, InputThisFrame, &Last_Input);
 
     HandleControllerInput(GameState, GamePermMemory, LoadedResources);
 

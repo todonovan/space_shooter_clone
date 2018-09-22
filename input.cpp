@@ -2,39 +2,6 @@
 #include "geometry.h"
 #include "input.h"
 
-#define INPUT_HISTORY_SZ 3
-
-struct thumbstick
-{
-    vec_2 StickVector_Normalized;
-    float Magnitude;
-};
-
-struct thumbstick_history
-{
-    uint8_t ptr;
-    thumbstick Buffer[INPUT_HISTORY_SZ];
-};
-
-struct asteroids_player_input
-{
-    bool A_Down;
-    bool A_DownThisFrame;
-
-    bool B_Down;
-    bool B_DownThisFrame;
-
-    bool Start_Down;
-    bool Start_DownThisFrame;
-
-    float LTrigger;
-    float RTrigger;
-
-    thumbstick LeftStick;
-
-    thumbstick_history LeftStickHistory;
-};
-
 void UpdateStickHistory(thumbstick_history *History, thumbstick *Next)
 {
     History->Buffer[History->ptr].Magnitude = Next->Magnitude;
@@ -74,22 +41,36 @@ void InitializePlayerInput(asteroids_player_input *Input)
     }
 }
 
-void TranslatePlatformInputToGame(asteroids_player_input *Dest, platform_player_input *ThisFrame, platform_player_input *LastFrame)
+void TranslatePlatformInputToGame(asteroids_player_input *Dest, platform_player_input *ThisFrame, asteroids_player_input *LastFrame)
 {
     Dest->A_Down = ThisFrame->A_Pressed;
-    Dest->A_DownThisFrame = (ThisFrame->A_Pressed && !LastFrame->A_Pressed);
+    Dest->A_DownThisFrame = (ThisFrame->A_Pressed && !LastFrame->A_Down);
 
     Dest->B_Down = ThisFrame->B_Pressed;
-    Dest->B_DownThisFrame = (ThisFrame->B_Pressed && !LastFrame->B_Pressed);
+    Dest->B_DownThisFrame = (ThisFrame->B_Pressed && !LastFrame->B_Down);
 
     Dest->Start_Down = ThisFrame->Start_Pressed;
-    Dest->Start_DownThisFrame = (ThisFrame->Start_Pressed && !LastFrame->Start_Pressed);
+    Dest->Start_DownThisFrame = (ThisFrame->Start_Pressed && !LastFrame->Start_Down);
 
     float raw_ltrig = ThisFrame->LTrigger > ThisFrame->TriggerDeadzone ? (float)ThisFrame->LTrigger : 0.0f;
-    Dest->LTrigger = (raw_ltrig - ThisFrame->TriggerDeadzone) / (ThisFrame->TriggerMax - ThisFrame->TriggerDeadzone);
-    float raw_rtrig = ThisFrame->RTrigger > ThisFrame->TriggerDeadzone ? (float)ThisFrame->RTrigger : 0.0f;
-    Dest->RTrigger = (raw_rtrig - ThisFrame->TriggerDeadzone) / (ThisFrame->TriggerMax - ThisFrame->TriggerDeadzone);
+    if (raw_ltrig > 0)
+    {
+        Dest->LTrigger = (raw_ltrig - ThisFrame->TriggerDeadzone) / (ThisFrame->TriggerMax - ThisFrame->TriggerDeadzone);
+    }
+    else
+    {
+        Dest->LTrigger = 0;
+    }
 
+    float raw_rtrig = ThisFrame->RTrigger > ThisFrame->TriggerDeadzone ? (float)ThisFrame->RTrigger : 0.0f;
+    if (raw_rtrig > 0)
+    {        
+        Dest->RTrigger = (raw_rtrig - ThisFrame->TriggerDeadzone) / (ThisFrame->TriggerMax - ThisFrame->TriggerDeadzone);
+    }
+    else
+    {
+        Dest->RTrigger = 0;
+    }
     thumbstick raw_stick = {};
 
     vec_2 left_stick_vec;

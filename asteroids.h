@@ -139,8 +139,7 @@ struct game_state
 {
     int WorldWidth;
     int WorldHeight;
-    asteroids_player_input *CurrentInput;
-    asteroids_player_input *LastInput;
+    asteroids_player_input *Input;
     uint32_t EntityCount;   // this gives us the next usable index when spawning new entities
     game_entity *Player;
     uint32_t MaxNumAsteroids;
