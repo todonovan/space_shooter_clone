@@ -4,6 +4,7 @@
 
 #include "platform.h"
 #include "input.h"
+#include "memory.h"
 #include "asteroids.h"
 #include "geometry.cpp"
 #include "game_entities.cpp"
@@ -76,7 +77,7 @@ void DrawLineSegmentWithWidth(platform_bitmap_buffer *Buffer, vec_2 *StartPoint,
         }
     }
 }
-
+/*
 void SetObjectModelForDraw(game_object *Object)
 {
     polygon *Poly = Object->Model->Polygon;
@@ -121,7 +122,7 @@ void DrawObjectModelIntoBuffer(platform_bitmap_buffer *Buffer, game_object *Obje
         Next.Y = DrawVerts->Verts[0].Y + Object->Midpoint.Y;
         DrawLineSegmentWithWidth(Buffer, &Cur, &Next, &Model->Color, Model->LineWidth);
     }
-}
+}*/
 
 void BeginMemorySegment(memory_segment *Segment, uint32_t Size, uint8_t *Storage)
 {
@@ -248,23 +249,22 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     
     // As the game loop performs a cold cast of the perm memory passed to it by the game layer (to game_permanent_memory),
     // we have to first account for the size of this struct before beginning the silo process.
-    int memory_used = sizeof(game_permanent_memory); 
-
-    
     // Each memory segment requires a pointer to the enclosing segment, the size of the segment, and a pointer to the beginning
     // of the segment in OS memory. The base is simply the pointer to the start of the permanent storage passed by the platform
     // layer, cast to bytes, and the offset is tracked via memory_used.
+
+    int memory_used = sizeof(game_permanent_memory);
     BeginMemorySegment(&GamePermMemory->PermMemSegment, PERM_STORAGE_STRUCT_SIZE, (uint8_t *)Memory->PermanentStorage + memory_used);
     memory_used += PERM_STORAGE_STRUCT_SIZE;
+
+    BeginMemorySegment(&GamePermMemory->AsteroidMemorySegment, ASTEROID_POOL_SIZE, (uint8_t *)Memory->PermanentStorage + memory_used);
+    memory_used += ASTEROID_POOL_SIZE;
     
     BeginMemorySegment(&GamePermMemory->ResourceMemorySegment, RESOURCE_MEMORY_SIZE, (uint8_t *)Memory->PermanentStorage + memory_used);
     memory_used += RESOURCE_MEMORY_SIZE;
 
-    BeginMemorySegment(&GamePermMemory->LaserMemorySegment, LASER_MEMORY_SIZE, (uint8_t *)Memory->PermanentStorage + memory_used);
-    memory_used += LASER_MEMORY_SIZE;
-
-    BeginMemorySegment(&GamePermMemory->AsteroidMemorySegment, ASTEROID_MEMORY_SIZE, (uint8_t *)Memory->PermanentStorage + memory_used);
-    memory_used += ASTEROID_MEMORY_SIZE;
+    BeginMemorySegment(&GamePermMemory->LaserMemorySegment, LASER_POOL_SIZE, (uint8_t *)Memory->PermanentStorage + memory_used);
+    memory_used += LASER_POOL_SIZE;
 
     BeginMemorySegment(&GamePermMemory->SceneMemorySegment, SCENE_MEMORY_SIZE, (uint8_t *)Memory->PermanentStorage + memory_used);
     memory_used += SCENE_MEMORY_SIZE;
@@ -273,6 +273,17 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     GamePermMemory->Resources = PushToMemorySegment(&GamePermMemory->PermMemSegment, loaded_resource_memory);
     loaded_resource_memory *ResourceMemory = GamePermMemory->Resources;
     LoadResources(&GamePermMemory->ResourceMemorySegment, ResourceMemory);
+
+    // Initialize the asteroid memory pool
+    game_entity_pool *AsteroidPool = (game_entity_pool *)GamePermMemory->AsteroidMemorySegment.BaseStorageLocation;
+    AsteroidPool->Blocks = (memory_block *)GamePermMemory->AsteroidMemorySegment.BaseStorageLocation + sizeof(game_entity_pool);
+    InitializeGameEntityPool(AsteroidPool, sizeof(game_entity), MAX_ASTEROID_COUNT);
+
+    // Initialize the laser memory pool
+    game_entity_pool *LaserPool = (game_entity_pool *)GamePermMemory->LaserMemorySegment.BaseStorageLocation;
+    LaserPool->Blocks = (memory_block *)GamePermMemory->LaserMemorySegment.BaseStorageLocation + sizeof(game_entity_pool);
+    InitializeGameEntityPool(LaserPool, sizeof(game_entity), MAX_LASER_COUNT);
+
 
 
     // *******                         INITIALIZE GAME STATE                             ************ 
@@ -324,16 +335,14 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
 
     // No asteroids are spawned at game startup, but instead at level startup, which occurs later in the process.
 
-    GameState->MaxNumAsteroids = MAX_NUM_SPAWNED_ASTEROIDS;
+    GameState->MaxNumAsteroids = MAX_ASTEROID_COUNT;
     GameState->NumSpawnedAsteroids = 0;
-    GameState->SpawnedAsteroids = PushToMemorySegment(&GamePermMemory->AsteroidMemorySegment, asteroid_set);
-    GameState->SpawnedAsteroids->Asteroids = PushArrayToMemorySegment(&GamePermMemory->AsteroidMemorySegment, MAX_NUM_SPAWNED_ASTEROIDS, game_entity);
     
-    GameState->MaxNumLasers = MAX_NUM_SPAWNED_LASERS;
+    GameState->MaxNumLasers = MAX_LASER_COUNT;
     GameState->NumSpawnedLasers = 0;
     GameState->LaserSet = PushToMemorySegment(&GamePermMemory->LaserMemorySegment, laser_set);
-    GameState->LaserSet->Lasers = PushArrayToMemorySegment(&GamePermMemory->LaserMemorySegment, MAX_NUM_SPAWNED_LASERS, game_entity);
-    GameState->LaserSet->LifeTimers = PushArrayToMemorySegment(&GamePermMemory->LaserMemorySegment, MAX_NUM_SPAWNED_LASERS, uint32_t);
+    GameState->LaserSet->Lasers = PushArrayToMemorySegment(&GamePermMemory->LaserMemorySegment, MAX_LASER_COUNT, game_entity);
+    GameState->LaserSet->LifeTimers = PushArrayToMemorySegment(&GamePermMemory->LaserMemorySegment, MAX_LASER_COUNT, uint32_t);
     
     game_object_info BlankLaserInfo = {};
     BlankLaserInfo.Type = LASER;
@@ -359,11 +368,9 @@ void HandleControllerInput(game_state *GameState, game_permanent_memory *GamePer
         game_object_info NewAstInfo = {};
         NewAstInfo.Midpoint.X = (float) (rand() % GameState->WorldWidth);
         NewAstInfo.Midpoint.Y = (float) (rand() % GameState->WorldHeight);
-        NewAstInfo.Momentum.X = 10000.0f / ((float) rand());
-        NewAstInfo.Momentum.Y = 10000.0f / ((float) rand());
-        NewAstInfo.AngularMomentum = 100.0f / ((float) rand());
-        NewAstInfo.InitVisible = true;
-        NewAstInfo.NewEntity = true;
+        NewAstInfo.Momentum.X = GenerateRandomFloat(-100.0f, 100.0f);
+        NewAstInfo.Momentum.Y = GenerateRandomFloat(-100.0f, 100.0f);
+        NewAstInfo.AngularMomentum = GenerateRandomFloat(-5.0f, 5.0f);
         
         int astIndex = rand() % 3;
         if (astIndex == 0) NewAstInfo.Type = ASTEROID_SMALL;
@@ -395,7 +402,7 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
     loaded_resource_memory *LoadedResources = GamePermMemory->Resources;
     game_entity *PlayerEntity = GameState->Player;
     game_object *Player = PlayerEntity->Master;
-    object_model *PlayerModel = Player->Model;
+    object_model *PlayerModel = &Player->Model;
 
     asteroids_player_input Last_Input
     {

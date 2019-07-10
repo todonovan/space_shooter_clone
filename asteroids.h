@@ -5,6 +5,7 @@
 #include "common.h"
 #include "platform.h"
 #include "geometry.h"
+#include "entities.h"
 #include "input.cpp"
 
 #define PLAYER_NUM_VERTICES 4
@@ -17,22 +18,18 @@
 
 #define LARGE_ASTEROID_NUM_VERTICES 8
 #define MEDIUM_ASTEROID_NUM_VERTICES 6
-#define SMALL_ASTEROID_NUM_VERTICES 4
+#define SMALL_ASTEROID_NUM_VERTICES 5
 
 #define ASTEROID_LINE_WIDTH 1.5f
 #define ASTEROID_RED 125
 #define ASTEROID_GREEN 125
 #define ASTEROID_BLUE 125
 
-#define MAX_NUM_SPAWNED_ASTEROIDS 98 // Each large asteroid results in 7 total asteroids spawning; 98 gives max of 14 large asteroids
-
 #define LASER_LINE_WIDTH 1.0f
 #define LASER_NUM_VERTICES 2
 #define LASER_RED 163
 #define LASER_GREEN 42
 #define LASER_BLUE 21
-
-#define MAX_NUM_SPAWNED_LASERS 5
 
 #define LASER_SPEED_MAG 25.0f
 #define LASER_SPAWN_TIMER 77
@@ -43,85 +40,6 @@ struct game_rect
 {
     vec_2 TopLeft;
     vec_2 BotRight;
-};
-
-struct color_triple
-{
-    uint8_t Red;
-    uint8_t Blue;
-    uint8_t Green;
-};
-
-typedef enum object_type
-{
-    PLAYER,
-    ASTEROID_LARGE,
-    ASTEROID_MEDIUM,
-    ASTEROID_SMALL,
-    LASER
-} object_type;
-
-struct object_model
-{
-    polygon *Polygon;
-    color_triple Color;
-    float LineWidth;
-};
-
-struct game_object
-{
-    object_type Type;
-    object_model *Model;   
-    vec_2 Midpoint;
-    float Radius;
-    vec_2 Momentum;
-    float OffsetAngle;
-    float AngularMomentum;
-    bool IsVisible;
-};
-
-struct game_object_info
-{
-    object_type Type;
-    vec_2 Midpoint;
-    vec_2 Momentum;
-    float OffsetAngle;
-    float AngularMomentum;
-    bool InitVisible;
-    bool NewEntity; // false if the associated entity is being 'repurposed'
-};
-
-// Clones are needed for collision checking at screen boundaries.
-// Clones have been reworked to contain a reference to a totally
-// new game object, rather than simply referring to the parent object.
-// This is so clones can be placed in data structures just like their
-// parents. This may be necessary if, for instance, a 'first pass' collision
-// detection sweep is done. Such a pass would certainly result in parent objects
-// being rejected while clones should be included; such an algorithm appears
-// difficult if clones do not contain their own semi-independent game objects.
-
-struct clone_set; // forward declaration
-
-struct game_entity
-{
-    bool IsLive;
-    // assign index to object for global id purposes; player is 0, lasers are 1 -- MAX_LASERS, asteroids are enumerated from there
-    uint32_t Index;
-    object_type Type;
-    game_object *Master;
-    clone_set *CloneSet;
-};
-
-struct object_clone
-{
-    game_entity *ParentEntity;
-    game_object *ClonedObject;
-};
-
-struct clone_set
-{
-    uint32_t Count;
-    object_clone *Clones;
 };
 
 struct asteroid_set
@@ -171,10 +89,10 @@ struct game_permanent_memory
 };
 
 #define PERM_STORAGE_STRUCT_SIZE ((5 * (sizeof(memory_segment))) + (sizeof(game_state)) + (sizeof(loaded_resource_memory)))
-#define LASER_MEMORY_SIZE Megabytes(5)
+#define LASER_POOL_SIZE (sizeof(game_entity_pool) + (MAX_LASER_COUNT * sizeof(memory_block)))
 #define RESOURCE_MEMORY_SIZE Megabytes(1)
-#define ASTEROID_MEMORY_SIZE ((GAME_PERM_MEMORY_SIZE - LASER_MEMORY_SIZE - RESOURCE_MEMORY_SIZE) / 2)
-#define SCENE_MEMORY_SIZE ((GAME_PERM_MEMORY_SIZE - LASER_MEMORY_SIZE - RESOURCE_MEMORY_SIZE - ASTEROID_MEMORY_SIZE))
+#define ASTEROID_POOL_SIZE (sizeof(game_entity_pool) + (MAX_ASTEROID_COUNT * sizeof(memory_block)))
+#define SCENE_MEMORY_SIZE ((GAME_PERM_MEMORY_SIZE - LASER_POOL_SIZE - RESOURCE_MEMORY_SIZE - ASTEROID_POOL_SIZE))
 
 
 #define PushArrayToMemorySegment(Segment, Count, type) (type *)AssignToMemorySegment_(Segment, (Count)*sizeof(type))

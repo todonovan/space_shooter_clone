@@ -1,6 +1,8 @@
 #ifndef GEOMETRY_CPP
 #define GEOMETRY_CPP
 
+#include <float.h>
+
 #include "common.h"
 #include "geometry.h"
 
@@ -55,8 +57,8 @@ vec_2 Normalize(vec_2 A)
 vec_2 Perpendicularize(vec_2 A)
 {
     vec_2 Perped;
-    Perped.X = A.Y;
-    Perped.Y = -(A.X);
+    Perped.X = -(A.Y);
+    Perped.Y = A.X;
 
     return Perped;
 }
@@ -67,10 +69,50 @@ float CalculateVectorDistance(vec_2 P1, vec_2 P2)
     return d;
 }
 
+void FurthestPointsAlongDirection(vec_2 Dir, polygon *P, vec_2 *max)
+{
+    float maxproj = -FLT_MAX;
+    for (uint32_t i = 0; i < P->N; i++)
+    {
+        float proj = Dot(P->Vertices[i], Dir);
+
+        if (proj > maxproj)
+        {
+            maxproj = proj;
+            max = &P->Vertices[i];
+        }
+    }
+}
+
+// Will need to be reconstructed each frame after rotation
+AABB ConstructAABB(polygon *P)
+{
+    AABB result = {};
+
+    vec_2 posX = {1, 0};
+    vec_2 posY = {0, 1};
+    vec_2 negX = {-1, 0};
+    vec_2 negY = {0, -1};
+
+    vec_2 minX, minY, maxX, maxY;
+
+    FurthestPointsAlongDirection(posX, P, &maxX);
+    FurthestPointsAlongDirection(posY, P, &maxY);
+    FurthestPointsAlongDirection(negX, P, &minX);
+    FurthestPointsAlongDirection(negY, P, &minY);
+
+    result.Min.X = negX.X;
+    result.Min.Y = negY.Y;
+    result.Max.X = posX.X;
+    result.Max.Y = posY.Y;
+
+    return result;
+}
+
 projection_vals Project(polygon *Poly, vec_2 Axis)
 {
     Axis = Normalize(Axis);
-    vec_2 *PolyVerts = Poly->DrawVerts->Verts;
+    vec_2 *PolyVerts = Poly->Vertices;
     float Min = Dot(PolyVerts[0], Axis);
     float Max = Min;
 
@@ -122,14 +164,14 @@ bool SeparatingAxisTest(polygon *A, polygon *B)
     for (uint32_t i = 0; i < A->N; i++)
     {
         vec_2 VertCur, VertNext;
-        VertCur = A->DrawVerts->Verts[i];
+        VertCur = A->Vertices[i];
         if (i == A->N - 1)
         {
-            VertNext = A->DrawVerts->Verts[0];
+            VertNext = A->Vertices[0];
         }
         else
         {
-            VertNext = B->DrawVerts->Verts[i+1];
+            VertNext = B->Vertices[i+1];
         }
         Axis = GetDir(VertCur, VertNext);
         Axis = Perpendicularize(Axis);
@@ -141,14 +183,14 @@ bool SeparatingAxisTest(polygon *A, polygon *B)
     for (uint32_t i = 0; i < B->N; i++)
     {
         vec_2 VertCur, VertNext;
-        VertCur = B->DrawVerts->Verts[i];
+        VertCur = B->Vertices[i];
         if (i == B->N - 1)
         {
-            VertNext = B->DrawVerts->Verts[0];
+            VertNext = B->Vertices[0];
         }
         else
         {
-            VertNext = B->DrawVerts->Verts[i+1];
+            VertNext = B->Vertices[i+1];
         }
         Axis = GetDir(VertCur, VertNext);
         Axis = Perpendicularize(Axis);

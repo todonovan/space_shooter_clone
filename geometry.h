@@ -1,22 +1,26 @@
 #ifndef GEOMETRY_H
 #define GEOMETRY_H
 
+// To simplify memory management (long story), each polygon will hold
+// enough space for 8 vertices.
+#define MAX_NUM_VERTS 8
+
 struct vec_2
 {
     float X;
     float Y;
 };
 
-struct vert_set
-{
-    vec_2 *Verts;
-};
-
 struct polygon
 {
     uint32_t N;
-    vert_set *StartVerts;
-    vert_set *DrawVerts;
+    vec_2 Vertices[MAX_NUM_VERTS];
+};
+
+struct AABB
+{
+    vec_2 Min;
+    vec_2 Max;
 };
 
 struct projection_vals

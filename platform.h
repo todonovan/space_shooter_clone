@@ -57,23 +57,6 @@ struct platform_player_input
     bool Start_Pressed;
 };
 
-struct game_memory
-{
-    bool IsInitialized;
-    uint32_t PermanentStorageSize;
-    void *PermanentStorage;
-    uint32_t TransientStorageSize;
-    void *TransientStorage;
-};
-
-struct memory_segment
-{
-    uint32_t Size;
-    uint8_t *BaseStorageLocation;
-    uint32_t Used;
-};
-
 bool ReadFileIntoBuffer(LPCTSTR FileName, void *Buffer, DWORD SizeToRead);
-void UpdateGameAndRender(game_memory *, platform_bitmap_buffer *, platform_sound_buffer *, platform_player_input *);
 
 #endif /* PLATFORM_H */

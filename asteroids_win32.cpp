@@ -218,13 +218,14 @@ LRESULT CALLBACK AsteroidsWindowCallback(HWND WindHandle,
 			PAINTSTRUCT PaintStruct;
 			UpdateWindowDimensions(WindHandle);
 			HDC PaintDC = BeginPaint(WindHandle, &PaintStruct);
-			int X = PaintStruct.rcPaint.left;
-			int Y = PaintStruct.rcPaint.top;
-			int Width = PaintStruct.rcPaint.right - PaintStruct.rcPaint.left;
-			int Height = PaintStruct.rcPaint.bottom - PaintStruct.rcPaint.top;
 			DrawToWindow(PaintDC);
 			EndPaint(WindHandle, &PaintStruct);
         } break;
+        /*case WM_SIZE:
+        {
+            UpdateWindowDimensions(WindHandle);
+            ResizeDIBSection((int)GameWindow.Width, (int)GameWindow.Height);
+        } break;*/
         case WM_CLOSE: case WM_DESTROY:
         {
             PostQuitMessage(0);

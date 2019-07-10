@@ -2,5 +2,6 @@
     "files.associations": {
         "*.rh": "cpp",
         "xutility": "cpp"
-    }
+    },
+    "C_Cpp.dimInactiveRegions": false
 }
