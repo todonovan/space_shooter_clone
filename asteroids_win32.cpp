@@ -167,7 +167,7 @@ void FillSoundBuffer(DWORD ByteToLock, DWORD BytesToWrite)
 }
 
 // Returns true if read was successful, false otherwise
-bool ReadFileIntoBuffer(LPCSTR FileName, void *Buffer, DWORD BytesToRead)
+bool32_t ReadFileIntoBuffer(LPCSTR FileName, void *Buffer, DWORD BytesToRead)
 {
     DWORD NumBytesRead = 0;
     HANDLE File = CreateFileA(FileName, GENERIC_READ, 0, 0, OPEN_EXISTING, 0, 0);
@@ -185,7 +185,7 @@ bool ReadFileIntoBuffer(LPCSTR FileName, void *Buffer, DWORD BytesToRead)
 
 // Returns true if the write was successful, false otherwise
 // Note that calling this function will truncate the associated file
-bool WriteBufferIntoFile(LPCSTR FileName, void *Buffer, DWORD BytesToWrite)
+bool32_t WriteBufferIntoFile(LPCSTR FileName, void *Buffer, DWORD BytesToWrite)
 {
     DWORD NumBytesWritten = 0;
     HANDLE File = CreateFileA(FileName, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);

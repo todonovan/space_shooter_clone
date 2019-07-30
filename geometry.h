@@ -14,13 +14,15 @@ struct vec_2
 struct polygon
 {
     uint32_t N;
+    vec_2 C;
     vec_2 Vertices[MAX_NUM_VERTS];
+    vec_2 BaseVertices[MAX_NUM_VERTS]; // non-rotated/scaled/skewed/so on
 };
 
 struct AABB
 {
     vec_2 Min;
-    vec_2 Max;
+    vec_2 Lengths;
 };
 
 struct projection_vals
@@ -29,11 +31,17 @@ struct projection_vals
     float Max;
 };
 
-vec_2 AddVectors(vec_2 V1, vec_2 V2);
+vec_2 AddVectors(vec_2 A, vec_2 B);
 
-vec_2 ScaleVector(vec_2 V, float S);
+vec_2 ScaleVector(vec_2 A, float S);
 
-vec_2 GetDir(vec_2 V1, vec_2 V2);
+void TranslateVector(vec_2 *ToTranslate, vec_2 TranslateBy);
+
+void RotatePolygon(polygon *Poly, float Angle);
+
+vec_2 GetDir(vec_2 A, vec_2 B);
+
+vec_2 GetDirUnit(vec_2 A, vec_2 B);
 
 float Dot(vec_2 A, vec_2 B);
 
@@ -47,10 +55,12 @@ float CalculateVectorDistance(vec_2 P1, vec_2 P2);
 
 projection_vals Project(polygon *Poly, vec_2 Axis);
 
-bool Contains(float N, projection_vals Range);
+bool32_t Contains(float N, projection_vals Range);
 
-bool Overlap(projection_vals A, projection_vals B);
+bool32_t Overlap(projection_vals A, projection_vals B);
 
-bool SeparatingAxisTest(polygon *A, polygon *B);
+bool32_t SeparatingAxisTest(polygon *A, polygon *B);
+
+AABB ConstructAABB(polygon *P);
 
 #endif // geometry.h

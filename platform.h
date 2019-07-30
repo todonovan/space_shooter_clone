@@ -48,15 +48,15 @@ struct platform_player_input
     float LY;
     uint32_t StickDeadzone;
     uint32_t MaxMagnitude;
-    bool A_Pressed;
-    bool B_Pressed;
+    bool32_t A_Pressed;
+    bool32_t B_Pressed;
     float LTrigger;
     float RTrigger;
     float TriggerDeadzone;
     float TriggerMax;
-    bool Start_Pressed;
+    bool32_t Start_Pressed;
 };
 
-bool ReadFileIntoBuffer(LPCTSTR FileName, void *Buffer, DWORD SizeToRead);
+bool32_t ReadFileIntoBuffer(LPCTSTR FileName, void *Buffer, DWORD SizeToRead);
 
 #endif /* PLATFORM_H */

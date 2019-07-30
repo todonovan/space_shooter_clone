@@ -22,28 +22,36 @@
 #include "geometry.h"
 #include "game_entities.h"
 
-inline bool CheckCoarseCollisionObjects(game_object *Obj1, game_object *Obj2)
+inline bool32_t AABBAABB(AABB A, AABB B)
 {
-    float radius_sum = Obj1->Radius + Obj2->Radius;
-    float distance = CalculateVectorDistance(Obj1->Midpoint, Obj2->Midpoint);
-    return distance <= radius_sum;
+    return (
+        (A.Min.X < B.Min.X + B.Lengths.X) &&
+        (A.Min.X + A.Lengths.X > B.Min.X) &&
+        (A.Min.Y < B.Min.Y + B.Lengths.Y) &&
+        (A.Min.Y + A.Lengths.Y > B.Min.Y)
+    );
 }
 
-bool CheckIfCollisionObjects(game_object *Obj1, game_object *Obj2)
+inline bool32_t CheckCoarseCollision(game_object *Obj1, game_object *Obj2)
 {
-    if (!CheckCoarseCollisionObjects(Obj1, Obj2)) return false;
+    return AABBAABB(Obj1->BoundingBox, Obj2->BoundingBox);
+}
 
-    return (SeparatingAxisTest(Obj1->Model->Polygon, Obj2->Model->Polygon));
+bool32_t CheckIfCollisionObjects(game_object *Obj1, game_object *Obj2)
+{
+    if (!CheckCoarseCollision(Obj1, Obj2)) return false;
+
+    return (SeparatingAxisTest(&Obj1->Model.Polygon, &Obj2->Model.Polygon));
     
 }
 
-bool CheckCollisionEntities(game_entity *Entity1, game_entity *Entity2)
+bool32_t CheckCollisionEntities(game_entity *Entity1, game_entity *Entity2)
 {
-    if (CheckIfCollisionObjects(Entity1->Master, Entity2->Master)) return true;
+    if (CheckIfCollisionObjects(&Entity1->Master, &Entity2->Master)) return true;
 
     for (int i = 0; i < 8; i++)
     {
-        if (CheckIfCollisionObjects(Entity1->Master, Entity2->CloneSet->Clones[i].ClonedObject)) return true;
+        if (CheckIfCollisionObjects(&Entity1->Master, &Entity2->CloneSet[i].ClonedObject)) return true;
     }
 
     return false;

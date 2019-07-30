@@ -6,10 +6,11 @@
 #include "input.h"
 #include "memory.h"
 #include "asteroids.h"
-#include "geometry.cpp"
-#include "game_entities.cpp"
-#include "collision.cpp"
-
+#include "geometry.h"
+#include "game_entities.h"
+#include "collision.h"
+#include "game_object.h"
+#include "entities.h"
 
 // Note that this may not be portable, as it relies upon the way Windows structures
 // bitmap data in memory.
@@ -234,7 +235,24 @@ void LoadResources(memory_segment *ResourceMemorySegment, loaded_resource_memory
     {
         HackyAssert(false);
     }
-}   
+}
+
+void RequestResourceLoad(LPCSTR FileName, void *Buffer, size_t SizeToRead)
+{
+    DWORD SizeToRead = (DWORD)(SizeToRead);
+    if (!ReadFileIntoBuffer(FileName, Buffer, SizeToRead))
+    {
+        HackyAssert(false);
+    }    
+}
+
+void RequestResourceWrite(LPCSTR FileName, void *Buffer, size_t SizeToWrite)
+{
+    if (!WriteBufferIntoFile(FileName, Buffer, (DWORD)SizeToWrite))
+    {
+        HackyAssert(false);
+    }
+}
 
 void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *GamePermMemory, int BufferWidth, int BufferHeight)
 {
@@ -302,9 +320,12 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     game_state *GameState = GamePermMemory->GameState;
     GameState->WorldWidth = BufferWidth;
     GameState->WorldHeight = BufferHeight;
+    GameState->Player = PushToMemorySegment(&GamePermMemory->PermMemSegment, game_entity);
     GameState->Input = PushToMemorySegment(&GamePermMemory->PermMemSegment, asteroids_player_input);
     InitializePlayerInput(GameState->Input);
-    GameState->EntityCount = 0;    
+    InitializeGameEntityPool(GameState->AsteroidPool, MAX_ASTEROID_COUNT);
+    InitializeGameEntityPool(GameState->LaserPool, MAX_LASER_COUNT);
+    InitializeLaserTimers(&GameState->LaserTimers);    
 
     // The game_entity struct combines the underlying game_object itself, the 'type' of the object, a boolean stating
     // whether the object is live (for memory cleaning purposes), and the set of object clones needed for
@@ -328,10 +349,8 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     // which the player will rotate, but only if the rotate controls are pressed. For asteroids, this denotes
     // the actual speed at which an asteroid rotates each frame, and is different for each asteroid.
     PlayerInfo.AngularMomentum = PLAYER_ANGULAR_MOMENTUM;
-    PlayerInfo.InitVisible = true;
 
-    GameState->Player = PushToMemorySegment(&GamePermMemory->SceneMemorySegment, game_entity);
-    InitializePlayer(GameState->Player, GameState, &GamePermMemory->SceneMemorySegment, ResourceMemory, &PlayerInfo);
+    InitPlayer(GameState->Player, &PlayerInfo);
 
     // No asteroids are spawned at game startup, but instead at level startup, which occurs later in the process.
 
@@ -385,8 +404,8 @@ void HandleControllerInput(game_state *GameState, game_permanent_memory *GamePer
     // Note: This procedure currently gives bad control feel; must be reworked.
     //AdjustMomentumValuesAgainstMax(Player, PlayerInput->NormalizedLX * PlayerInput->Magnitude,
     //                              PlayerInput->NormalizedLY * PlayerInput->Magnitude);
-    MomentumAdjustment = ScaleVector(Input->LeftStick.StickVector_Normalized, (Input->LeftStick.Magnitude * 0.8f));
-    UpdateGameEntityMomentumAndAngle(GameState, MomentumAdjustment, (Input->LTrigger + Input->RTrigger));    
+    //MomentumAdjustment = ScaleVector(Input->LeftStick.StickVector_Normalized, (Input->LeftStick.Magnitude * 0.8f));
+    //UpdateGameEntityMomentumAndAngle(GameState, MomentumAdjustment, (Input->LTrigger + Input->RTrigger));    
 }
 
 void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenBuffer, platform_sound_buffer *SoundBuffer, platform_player_input *InputThisFrame, platform_player_input *InputLastFrame)
@@ -398,11 +417,7 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
         InitializeGamePermanentMemory(Memory, GamePermMemory, OffscreenBuffer->Width, OffscreenBuffer->Height);
     }
 
-    game_state *GameState = GamePermMemory->GameState;
-    loaded_resource_memory *LoadedResources = GamePermMemory->Resources;
-    game_entity *PlayerEntity = GameState->Player;
-    game_object *Player = PlayerEntity->Master;
-    object_model *PlayerModel = &Player->Model;
+    game_state *GameState = &GamePermMemory->GameState;
 
     asteroids_player_input Last_Input
     {
@@ -422,10 +437,9 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
 
     HandleControllerInput(GameState, GamePermMemory, LoadedResources);
 
-    game_entity *Asteroids = GameState->SpawnedAsteroids->Asteroids;
-    vec_2 PlayerDesiredEnd = AddVectors(Player->Midpoint, Player->Momentum);
-
-
+    ProcessEntitiesForFrame(GameState, GameState->Input);
+    
+    /*
     // Collision handling
     for (uint32_t i = 0; i < GameState->NumSpawnedAsteroids; ++i)
     {
@@ -484,4 +498,5 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
     HandleSceneEdgeWarping(GameState, OffscreenBuffer->Width, OffscreenBuffer->Height);
     SetSceneModelsForDraw(GameState);
     DrawSceneModelsIntoBuffer(OffscreenBuffer, GameState);
+    */
 }

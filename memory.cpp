@@ -8,9 +8,9 @@ void InitializeMemoryBlock(memory_block *Block)
     Block->Memory = {};
 }
 
-void InitializeGameEntityPool(game_entity_pool *EntityPool, uint32_t EntitySize, uint32_t BlockCount)
+void InitializeGameEntityPool(game_entity_pool *EntityPool, uint32_t BlockCount)
 {
-    EntityPool->PoolInfo.ItemSize = EntitySize;
+    EntityPool->PoolInfo.ItemSize = sizeof(game_entity);
     EntityPool->PoolInfo.BlockSize = sizeof(memory_block);
     EntityPool->PoolInfo.NumOccupied = 0;
     EntityPool->PoolInfo.BlockCount = BlockCount;

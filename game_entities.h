@@ -22,7 +22,7 @@ void KillLaser(game_state *GameState, game_entity *Laser);
 
 void FireLaser(game_state *GameState, memory_segment *LaserMemSegment, loaded_resource_memory *Resources, game_entity *Player);
 
-void HandleEntityEdgeWarping(game_entity *Entity, int ScreenWidth, int ScreenHeight);
+
 
 void UpdateGameEntityMomentumAndAngle(game_state *GameState, vec_2 MomentumD, float AngularMomentumD);
 

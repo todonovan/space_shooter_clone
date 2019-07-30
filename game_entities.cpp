@@ -340,46 +340,7 @@ void KillLaser(game_state *GameState, game_entity *Laser)
     GameState->NumSpawnedLasers -= 1;
 }
 
-void HandleEntityEdgeWarping(game_entity *Entity, int ScreenWidth, int ScreenHeight)
-{
-    game_object *Master = Entity->Master;
-    if (Master->Midpoint.X < 0)
-    {
-        Master->Midpoint.X += ScreenWidth;
-        object_clone *Clones = Entity->CloneSet->Clones;
-        for (int i = 0; i < 8; ++i)
-        {
-            Clones[i].ClonedObject->Midpoint.X += ScreenWidth;
-        }
-    }
-    else if (Master->Midpoint.X >= ScreenWidth)
-    {
-        Master->Midpoint.X -= ScreenWidth;
-        object_clone *Clones = Entity->CloneSet->Clones;
-        for (int i = 0; i < 8; ++i)
-        {
-            Clones[i].ClonedObject->Midpoint.X -= ScreenWidth;
-        }
-    }
-    if (Master->Midpoint.Y < 0)
-    {
-        Master->Midpoint.Y += ScreenHeight;
-        object_clone *Clones = Entity->CloneSet->Clones;
-        for (int i = 0; i < 8; ++i)
-        {
-            Clones[i].ClonedObject->Midpoint.Y += ScreenHeight;
-        }
-    }
-    else if (Master->Midpoint.Y >= ScreenHeight)
-    {
-        Master->Midpoint.Y -= ScreenHeight;
-        object_clone *Clones = Entity->CloneSet->Clones;
-        for (int i = 0; i < 8; ++i)
-        {
-            Clones[i].ClonedObject->Midpoint.Y -= ScreenHeight;
-        }
-    }
-}
+
 
 void UpdateGameEntityMomentumAndAngle(game_state *GameState, vec_2 MomentumDelta, float AngularMomentumDelta)
 {

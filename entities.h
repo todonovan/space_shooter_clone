@@ -1,56 +1,17 @@
 #ifndef ENTITIES_H
 #define ENTITIES_H
 
+#include "common.h"
 #include "asteroids.h"
+#include "game_object.h"
+#include "model.h"
 
 #define NUM_OBJECT_CLONES 8
 #define MAX_ASTEROID_COUNT 300
 #define MAX_LASER_COUNT 10
-
-struct color_triple
-{
-    uint8_t Red;
-    uint8_t Blue;
-    uint8_t Green;
-};
-
-typedef enum object_type
-{
-    PLAYER,
-    SMALL_ASTEROID,
-    MEDIUM_ASTEROID,
-    LARGE_ASTEROID,
-    LASER
-} object_type;
-
-struct object_model
-{
-    polygon Polygon;
-    color_triple Color;
-    float LineWidth;
-};
-
-struct game_object
-{
-    object_type Type;
-    vec_2 Midpoint;
-    float MaxRadius; // for coarse collision detection
-    vec_2 Momentum;
-    float OffsetAngle;
-    float AngularMomentum;
-    object_model Model;
-    AABB BoundingBox;
-};
-
-// Used to init game objects
-struct game_object_info
-{
-    object_type Type;
-    vec_2 Midpoint;
-    vec_2 Momentum;
-    float OffsetAngle;
-    float AngularMomentum;
-};
+#define MAX_ENTITY_COUNT (MAX_LASER_COUNT + MAX_ASTEROID_COUNT + 1)
+#define LASER_SPEED 25.0f
+#define LASER_SPAWN_TIMER 77
 
 struct game_entity
 {
@@ -61,13 +22,48 @@ struct game_entity
     object_clone CloneSet[NUM_OBJECT_CLONES];
 };
 
-struct object_clone
+struct laser_timing
 {
-    game_entity *ParentEntity;
-    game_object ClonedObject;
+    uint32_t InitialValue;
+    uint32_t Timers[MAX_LASER_COUNT];
 };
 
-void SpawnAsteroid(game_entity_pool *Pool, game_object_info NewAsteroidInfo);
-void DemoteAsteroid(game_entity *Asteroid);
+struct player_info
+{
+    bool32_t IsLive;
+    uint32_t Score;
+    uint32_t Lives;
+    uint32_t Kills;
+};
 
+// The return values from calling 'demote asteroid' function.
+// WasSplit is nonzero if a split occurred, and zero if the asteroid
+// was instead killed and no split resulted.
+struct asteroid_split_results
+{
+    bool32_t WasSplit;
+    game_entity *A;
+    game_entity *B;
+};
+
+game_entity * SpawnAsteroid(game_state *GameState, game_object_info *NewAsteroidInfo);
+asteroid_split_results DemoteAsteroid(game_entity *Asteroid);
+
+// KillAsteroid is made available for end-of-level/player death cleanup purposes. Do not call
+// this directly otherwise (i.e., while handling asteroid-laser collisions)
+void KillAsteroid(game_entity *Asteroid);
+
+void InitPlayer(game_entity *Player, game_object_info *PlayerInfo);
+
+void InitializeLaserTimers(laser_timing *Timers);
+void SpawnLaser(game_entity_pool *Pool, game_object_info *NewLaserInfo, laser_timing *Timers);
+void KillLaser(game_entity *Laser, laser_timing *Timers);
+
+void ProcessEntitiesForFrame(game_state *GameState, asteroids_player_input *Input);
+
+/*
+void TickAllEntities(game_state *GameState, asteroids_player_input *Input);
+void CollideAllEntities(game_state *GameState);
+void HandleEntityEdgeWarping(game_entity *Entity, int ScreenWidth, int ScreenHeight);
+*/
 #endif

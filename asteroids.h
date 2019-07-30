@@ -1,38 +1,12 @@
 #ifndef ASTEROIDS_H
 #define ASTEROIDS_H
 
-
 #include "common.h"
 #include "platform.h"
 #include "geometry.h"
 #include "entities.h"
-#include "input.cpp"
-
-#define PLAYER_NUM_VERTICES 4
-#define PLAYER_LINE_WIDTH 2.0f
-#define PLAYER_RED 200
-#define PLAYER_GREEN 200
-#define PLAYER_BLUE 200
-#define PLAYER_ANGULAR_MOMENTUM 0.05f
-#define PLAYER_MAX_MOMENTUM 30.0f
-
-#define LARGE_ASTEROID_NUM_VERTICES 8
-#define MEDIUM_ASTEROID_NUM_VERTICES 6
-#define SMALL_ASTEROID_NUM_VERTICES 5
-
-#define ASTEROID_LINE_WIDTH 1.5f
-#define ASTEROID_RED 125
-#define ASTEROID_GREEN 125
-#define ASTEROID_BLUE 125
-
-#define LASER_LINE_WIDTH 1.0f
-#define LASER_NUM_VERTICES 2
-#define LASER_RED 163
-#define LASER_GREEN 42
-#define LASER_BLUE 21
-
-#define LASER_SPEED_MAG 25.0f
-#define LASER_SPAWN_TIMER 77
+#include "input.h"
+#include "model.h"
 
 
 // Simple rect struct, useful for AABBs
@@ -42,46 +16,11 @@ struct game_rect
     vec_2 BotRight;
 };
 
-struct asteroid_set
-{
-    game_entity *Asteroids;
-};
-
-struct laser_set
-{
-    game_entity *Lasers;
-    uint32_t *LifeTimers;
-};
-
-struct game_state
-{
-    int WorldWidth;
-    int WorldHeight;
-    asteroids_player_input *Input;
-    uint32_t EntityCount;   // this gives us the next usable index when spawning new entities
-    game_entity *Player;
-    uint32_t MaxNumAsteroids;
-    uint32_t NumSpawnedAsteroids;
-    asteroid_set *SpawnedAsteroids;
-    uint32_t MaxNumLasers;
-    uint32_t NumSpawnedLasers;
-    laser_set *LaserSet;
-};
-
-struct loaded_resource_memory
-{
-    vec_2 *PlayerVertices;
-    vec_2 *SmallAsteroidVertices;
-    vec_2 *MediumAsteroidVertices;
-    vec_2 *LargeAsteroidVertices;
-    vec_2 *LaserVertices;
-};
-
 struct game_permanent_memory
 {
     memory_segment PermMemSegment;
-    game_state *GameState;
-    loaded_resource_memory *Resources;
+    game_state GameState;
+
     memory_segment ResourceMemorySegment;
     memory_segment SceneMemorySegment;        
     memory_segment LaserMemorySegment;
@@ -100,5 +39,9 @@ struct game_permanent_memory
 void * AssignToMemorySegment_(memory_segment *Segment, uint32_t Size);
 
 void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenBuffer, platform_sound_buffer *SoundBuffer, platform_player_input *Cur, platform_player_input *Last);
+
+// Provide these here so other portions of the game layer don't have to talk directly to platform layer.
+void RequestResourceLoad(LPCSTR FileName, void *Buffer, size_t SizeToRead);
+void RequestResourceWrite(LPCSTR FileName, void *Buffer, size_t SizeToWrite);
 
 #endif // asteroids.h

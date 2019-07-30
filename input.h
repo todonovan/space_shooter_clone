@@ -22,14 +22,14 @@ struct thumbstick_history
 
 struct asteroids_player_input
 {
-    bool A_Down;
-    bool A_DownThisFrame;
+    bool32_t A_Down;
+    bool32_t A_DownThisFrame;
 
-    bool B_Down;
-    bool B_DownThisFrame;
+    bool32_t B_Down;
+    bool32_t B_DownThisFrame;
 
-    bool Start_Down;
-    bool Start_DownThisFrame;
+    bool32_t Start_Down;
+    bool32_t Start_DownThisFrame;
 
     float LTrigger;
     float RTrigger;
