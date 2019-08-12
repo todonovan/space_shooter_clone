@@ -2,128 +2,24 @@
 #include <xinput.h>
 
 
+#include "asteroids.h"
 #include "platform.h"
 #include "input.h"
 #include "memory.h"
-#include "asteroids.h"
 #include "geometry.h"
-#include "game_entities.h"
-#include "collision.h"
-#include "game_object.h"
 #include "entities.h"
+#include "game_object.h"
+#include "collision.h"
+#include "common.cpp"
+#include "input.cpp"
+#include "memory.cpp"
+#include "geometry.cpp"
+#include "collision.cpp"
+#include "game_object.cpp"
+#include "entities.cpp"
+#include "model.cpp"
+#include "render.cpp"
 
-// Note that this may not be portable, as it relies upon the way Windows structures
-// bitmap data in memory.
-void SetPixelInBuffer(platform_bitmap_buffer *Buffer, vec_2 *Coords, color_triple *Colors)
-{
-    if (!(Buffer->Memory)) return;
-    int X = (Coords->X < 0) ? ((int)Coords->X + Buffer->Width) : ((int)Coords->X % Buffer->Width);
-    int Y = (Coords->Y < 0) ? ((int)Coords->Y + Buffer->Height) : ((int)Coords->Y % Buffer->Height);
-
-    uint8_t *Pixel = (uint8_t *)((char *)(Buffer->Memory) + (Y * Buffer->Width * 4) + (X * 4));
-
-    *Pixel = (Colors->Blue);
-    Pixel++;
-    *Pixel = (Colors->Green);
-    Pixel++;
-    *Pixel = (Colors->Red);
-}
-
-/// TODO!! This implementation of Bresenham, courtesy of the internet, is busted. Must find better line-drawing
-/// alg that handles width properly. All Bresenham implementations seem to be poorly suited to width handling.
-void DrawLineSegmentWithWidth(platform_bitmap_buffer *Buffer, vec_2 *StartPoint, vec_2 *EndPoint, color_triple *Color, float LineWidth)
-{
-    int x0 = (int)(StartPoint->X);
-    int x1 = (int)(EndPoint->X);
-    int y0 = (int)(StartPoint->Y);
-    int y1 = (int)(EndPoint->Y);
-    float wd = LineWidth;
-    int dx = abs(x1-x0), sx = x0 < x1 ? 1 : -1;
-    int dy = abs(y1-y0), sy = y0 < y1 ? 1 : -1;
-    int err = dx-dy, e2, x2, y2;
-    float ed = (dx+dy == 0) ? 1.0f : sqrtf(((float)dx*(float)dx)+((float)dy*(float)dy));
-
-
-    for (wd = (wd+1)/2; ; )
-    {
-        vec_2 Coords;
-        Coords.X = (float)(x0);
-        Coords.Y = (float)(y0);
-        SetPixelInBuffer(Buffer, &Coords, Color);
-        e2 = err; x2 = x0;
-        if (2*e2 >= -dx)
-        {
-            for (e2 += dy, y2 = y0; e2 < ed*wd && (y1 != y2 || dx > dy); e2 += dx)
-            {
-                vec_2 Coords2;
-                Coords2.X = (float)(x0);
-                Coords2.Y = (float)(y2 += sy);
-
-                SetPixelInBuffer(Buffer, &Coords2, Color);
-            }
-            if (x0 == x1) break;
-            e2 = err; err -= dy; x0 += sx;
-        }
-        if (2*e2 <= dy)
-        {
-            for (e2 = dx-e2; e2 < ed*wd && (x1 != x2 || dx < dy); e2 += dy)
-            {
-                vec_2 Coords2;
-                Coords2.X = (float)(x2 += sx);
-                Coords2.Y = (float)(y0);
-                SetPixelInBuffer(Buffer, &Coords2, Color);
-            }
-            if (y0 == y1) break;
-            err += dx; y0 += sy;
-        }
-    }
-}
-/*
-void SetObjectModelForDraw(game_object *Object)
-{
-    polygon *Poly = Object->Model->Polygon;
-    float Theta = Object->OffsetAngle;
-    vec_2 *StartVerts = Poly->StartVerts->Verts;
-    vec_2 *DrawVerts = Poly->DrawVerts->Verts;
-
-    for (uint32_t i = 0; i < Poly->N; ++i)
-    {
-        float X_Orig = StartVerts[i].X;
-        float Y_Orig = StartVerts[i].Y;
-        DrawVerts[i].X = (X_Orig * cosf(Theta)) - (Y_Orig * sinf(Theta));
-        DrawVerts[i].Y = (X_Orig * sinf(Theta)) + (Y_Orig * cosf(Theta));
-    }
-}
-
-void DrawObjectModelIntoBuffer(platform_bitmap_buffer *Buffer, game_object *Object)
-{
-    if (!(Buffer->Memory)) return;
-
-    int cur = 0, next = 1;
-    vec_2 Cur, Next;
-    object_model *Model = Object->Model;
-    polygon *Poly = Model->Polygon;
-    vert_set *DrawVerts = Poly->DrawVerts;
-
-    for (uint32_t i = 0; i < Poly->N - 1; ++i)
-    {
-        Cur.X = DrawVerts->Verts[cur].X + Object->Midpoint.X;
-        Cur.Y = DrawVerts->Verts[cur].Y + Object->Midpoint.Y;
-        Next.X = DrawVerts->Verts[next].X + Object->Midpoint.X;
-        Next.Y = DrawVerts->Verts[next].Y + Object->Midpoint.Y;
-        DrawLineSegmentWithWidth(Buffer, &Cur, &Next, &Model->Color, Model->LineWidth);
-        ++cur;
-        if (i < Poly->N - 2) ++next;
-    }
-    if (Object->Type != LASER)
-    {
-        Cur.X = DrawVerts->Verts[cur].X + Object->Midpoint.X;
-        Cur.Y = DrawVerts->Verts[cur].Y + Object->Midpoint.Y;
-        Next.X = DrawVerts->Verts[0].X + Object->Midpoint.X;
-        Next.Y = DrawVerts->Verts[0].Y + Object->Midpoint.Y;
-        DrawLineSegmentWithWidth(Buffer, &Cur, &Next, &Model->Color, Model->LineWidth);
-    }
-}*/
 
 void BeginMemorySegment(memory_segment *Segment, uint32_t Size, uint8_t *Storage)
 {
@@ -139,58 +35,6 @@ void * AssignToMemorySegment_(memory_segment *Segment, uint32_t Size)
     void *Result = Segment->BaseStorageLocation + Segment->Used;
     Segment->Used += Size;
     return Result;
-}
-
-void TriggerEndGame()
-{
-    
-}
-
-void HandleSceneEdgeWarping(game_state *GameState, int Width, int Height)
-{
-    HandleEntityEdgeWarping(GameState->Player, Width, Height);
-    for (uint32_t i = 0; i < GameState->NumSpawnedAsteroids; ++i)
-    {
-        HandleEntityEdgeWarping(&GameState->SpawnedAsteroids->Asteroids[i], Width, Height);
-    }
-    for (uint32_t i = 0; i < GameState->MaxNumLasers; ++i)
-    {
-        if (GameState->LaserSet->Lasers[i].Master->IsVisible)
-        {
-            HandleEntityEdgeWarping(&GameState->LaserSet->Lasers[i], Width, Height);
-        }
-    }
-}
-
-void SetSceneModelsForDraw(game_state *GameState)
-{
-    SetObjectModelForDraw(GameState->Player->Master);
-    for (uint32_t i = 0; i < GameState->NumSpawnedAsteroids; ++i)
-    {
-        SetObjectModelForDraw(GameState->SpawnedAsteroids->Asteroids[i].Master);
-    }
-    for (uint32_t i = 0; i < GameState->MaxNumLasers; ++i)
-    {
-        if (GameState->LaserSet->Lasers[i].Master->IsVisible)
-        {
-            SetObjectModelForDraw(GameState->LaserSet->Lasers[i].Master);
-        }
-    }
-}
-
-void DrawSceneModelsIntoBuffer(platform_bitmap_buffer *Buffer, game_state *GameState)
-{
-    if (GameState->Player->Master->IsVisible) DrawObjectModelIntoBuffer(Buffer, GameState->Player->Master);
-    for (uint32_t i = 0; i < GameState->NumSpawnedAsteroids; ++i)
-    {
-        game_object *Asteroid = GameState->SpawnedAsteroids->Asteroids[i].Master;
-        if (Asteroid->IsVisible) DrawObjectModelIntoBuffer(Buffer, Asteroid);
-    }
-    for (uint32_t i = 0; i < GameState->MaxNumLasers; ++i)
-    {
-        game_object *Laser = GameState->LaserSet->Lasers[i].Master;
-        if (Laser->IsVisible) DrawObjectModelIntoBuffer(Buffer, Laser);
-    }
 }
 
 void LoadResources(memory_segment *ResourceMemorySegment, loaded_resource_memory *Resources)
@@ -295,12 +139,12 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     // Initialize the asteroid memory pool
     game_entity_pool *AsteroidPool = (game_entity_pool *)GamePermMemory->AsteroidMemorySegment.BaseStorageLocation;
     AsteroidPool->Blocks = (memory_block *)GamePermMemory->AsteroidMemorySegment.BaseStorageLocation + sizeof(game_entity_pool);
-    InitializeGameEntityPool(AsteroidPool, sizeof(game_entity), MAX_ASTEROID_COUNT);
+    InitializeGameEntityPool(AsteroidPool, MAX_ASTEROID_COUNT);
 
     // Initialize the laser memory pool
     game_entity_pool *LaserPool = (game_entity_pool *)GamePermMemory->LaserMemorySegment.BaseStorageLocation;
     LaserPool->Blocks = (memory_block *)GamePermMemory->LaserMemorySegment.BaseStorageLocation + sizeof(game_entity_pool);
-    InitializeGameEntityPool(LaserPool, sizeof(game_entity), MAX_LASER_COUNT);
+    InitializeGameEntityPool(LaserPool, MAX_LASER_COUNT);
 
 
 
@@ -320,6 +164,8 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     game_state *GameState = GamePermMemory->GameState;
     GameState->WorldWidth = BufferWidth;
     GameState->WorldHeight = BufferHeight;
+    GameState->WorldCenter.X = (float)BufferWidth / 2.0f;
+    GameState->WorldCenter.Y = (float)BufferHeight / 2.0f;
     GameState->Player = PushToMemorySegment(&GamePermMemory->PermMemSegment, game_entity);
     GameState->Input = PushToMemorySegment(&GamePermMemory->PermMemSegment, asteroids_player_input);
     InitializePlayerInput(GameState->Input);
@@ -338,8 +184,7 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     PlayerInfo.Type = PLAYER;
 
     // Spawn the player at the midpoint of the world space.
-    PlayerInfo.Midpoint.X = (float)GameState->WorldWidth / 2.0f;
-    PlayerInfo.Midpoint.Y = (float)GameState->WorldHeight / 2.0f;
+    PlayerInfo.Midpoint = GameState->WorldCenter;
 
     PlayerInfo.Momentum.X = 0;
     PlayerInfo.Momentum.Y = 0;
@@ -351,61 +196,17 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     PlayerInfo.AngularMomentum = PLAYER_ANGULAR_MOMENTUM;
 
     InitPlayer(GameState->Player, &PlayerInfo);
-
-    // No asteroids are spawned at game startup, but instead at level startup, which occurs later in the process.
-
-    GameState->MaxNumAsteroids = MAX_ASTEROID_COUNT;
-    GameState->NumSpawnedAsteroids = 0;
     
-    GameState->MaxNumLasers = MAX_LASER_COUNT;
-    GameState->NumSpawnedLasers = 0;
-    GameState->LaserSet = PushToMemorySegment(&GamePermMemory->LaserMemorySegment, laser_set);
-    GameState->LaserSet->Lasers = PushArrayToMemorySegment(&GamePermMemory->LaserMemorySegment, MAX_LASER_COUNT, game_entity);
-    GameState->LaserSet->LifeTimers = PushArrayToMemorySegment(&GamePermMemory->LaserMemorySegment, MAX_LASER_COUNT, uint32_t);
-    
-    game_object_info BlankLaserInfo = {};
-    BlankLaserInfo.Type = LASER;
-    BlankLaserInfo.InitVisible = false;
-    InitializeLaserEntities(GameState->LaserSet->Lasers, GameState, &GamePermMemory->LaserMemorySegment, ResourceMemory, &BlankLaserInfo);
     Memory->IsInitialized = true;
 }
 
-void HandleControllerInput(game_state *GameState, game_permanent_memory *GamePermMemory, loaded_resource_memory *Resources)
+void HandleControllerInput(game_state *GameState)
 {
     asteroids_player_input *Input = GameState->Input;
     if (Input->Start_DownThisFrame)
     {
         PostQuitMessage(0);
     }
-    if (Input->B_DownThisFrame)
-    {
-        if (GameState->NumSpawnedLasers < GameState->MaxNumLasers) FireLaser(GameState, &GamePermMemory->LaserMemorySegment, Resources, GameState->Player);
-    }
-    
-    if (Input->A_DownThisFrame)
-    {
-        game_object_info NewAstInfo = {};
-        NewAstInfo.Midpoint.X = (float) (rand() % GameState->WorldWidth);
-        NewAstInfo.Midpoint.Y = (float) (rand() % GameState->WorldHeight);
-        NewAstInfo.Momentum.X = GenerateRandomFloat(-100.0f, 100.0f);
-        NewAstInfo.Momentum.Y = GenerateRandomFloat(-100.0f, 100.0f);
-        NewAstInfo.AngularMomentum = GenerateRandomFloat(-5.0f, 5.0f);
-        
-        int astIndex = rand() % 3;
-        if (astIndex == 0) NewAstInfo.Type = ASTEROID_SMALL;
-        else if (astIndex == 1) NewAstInfo.Type = ASTEROID_MEDIUM;
-        else NewAstInfo.Type = ASTEROID_LARGE;
-
-        InitializeAsteroidEntity(GameState, &GamePermMemory->AsteroidMemorySegment, Resources, &NewAstInfo);
-    }
-
-    vec_2 MomentumAdjustment = {};
-
-    // Note: This procedure currently gives bad control feel; must be reworked.
-    //AdjustMomentumValuesAgainstMax(Player, PlayerInput->NormalizedLX * PlayerInput->Magnitude,
-    //                              PlayerInput->NormalizedLY * PlayerInput->Magnitude);
-    //MomentumAdjustment = ScaleVector(Input->LeftStick.StickVector_Normalized, (Input->LeftStick.Magnitude * 0.8f));
-    //UpdateGameEntityMomentumAndAngle(GameState, MomentumAdjustment, (Input->LTrigger + Input->RTrigger));    
 }
 
 void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenBuffer, platform_sound_buffer *SoundBuffer, platform_player_input *InputThisFrame, platform_player_input *InputLastFrame)
@@ -417,7 +218,7 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
         InitializeGamePermanentMemory(Memory, GamePermMemory, OffscreenBuffer->Width, OffscreenBuffer->Height);
     }
 
-    game_state *GameState = &GamePermMemory->GameState;
+    game_state *GameState = GamePermMemory->GameState;
 
     asteroids_player_input Last_Input
     {
@@ -435,7 +236,7 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
 
     TranslatePlatformInputToGame(GameState->Input, InputThisFrame, &Last_Input);
 
-    HandleControllerInput(GameState, GamePermMemory, LoadedResources);
+    HandleControllerInput(GameState);
 
     ProcessEntitiesForFrame(GameState, GameState->Input);
     

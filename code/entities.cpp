@@ -1,3 +1,5 @@
+#pragma once
+
 #include "asteroids.h"
 #include "entities.h"
 #include "common.h"
@@ -5,6 +7,8 @@
 #include "geometry.h"
 #include "model.h"
 #include "input.h"
+#include "render.h"
+#include "collision.h"
 
 void InitObjectClones(game_entity *Entity, uint32_t WorldWidth, uint32_t WorldHeight)
 {
@@ -45,9 +49,10 @@ void InitObjectClones(game_entity *Entity, uint32_t WorldWidth, uint32_t WorldHe
     Clones[7].Offset.Y = -WorldHeight;
 }
 
-game_entity * SpawnNonPlayerEntity(game_entity_pool *Pool, game_object_info *ObjInfoStruct, uint32_t WorldWidth, uint32_t WorldHeight)
+game_entity * SpawnNonPlayerEntity(game_entity_pool *Pool, game_object_info *ObjInfoStruct)
 {
     game_entity *New = AllocateEntity(Pool);
+    New->SpawnedThisFrame = true;
     New->EntityType = ObjInfoStruct->Type;
     
     game_object *Master = &New->Master;
@@ -58,39 +63,48 @@ game_entity * SpawnNonPlayerEntity(game_entity_pool *Pool, game_object_info *Obj
     Master->OffsetAngle = ObjInfoStruct->OffsetAngle;
     InitObjectModel(New);
 
-    InitObjectClones(New, WorldWidth, WorldHeight);
+    InitObjectClones(New, ObjInfoStruct->WorldWidth, ObjInfoStruct->WorldHeight);
     return New;
 }
 
 game_entity * SpawnAsteroid(game_state *GameState, game_object_info *ObjInfoStruct)
 {
-    return SpawnNonPlayerEntity(GameState->AsteroidPool, ObjInfoStruct, GameState->WorldWidth, GameState->WorldHeight);
+    return SpawnNonPlayerEntity(GameState->AsteroidPool, ObjInfoStruct);
 }
 
-asteroid_split_results DemoteAsteroid(game_entity *Asteroid)
+asteroid_demote_results DemoteAsteroid(game_entity *Asteroid, game_state *GameState)
 {
-    asteroid_split_results results = {};
+    asteroid_demote_results results = {};
 
     if (Asteroid->EntityType == SMALL_ASTEROID)
     {
         KillAsteroid(Asteroid);
-        results.WasSplit = 0;
+        results.WasKilled = true;
         return results;
     }
     else
     {
-        return SplitAsteroid(Asteroid);
+        return SplitAsteroid(Asteroid, GameState);
     }
 }
 
-asteroid_split_results SplitAsteroid(game_entity *Asteroid)
+void RandomizeAsteroidLocationMomentum(game_object_info *Params)
+{
+    Params->Midpoint.X = (float) (GenerateRandomUnsignedIntFromZeroTo(Params->WorldWidth));
+    Params->Midpoint.Y = (float) (GenerateRandomUnsignedIntFromZeroTo(Params->WorldHeight));
+    Params->Momentum.X = GenerateRandomFloat(-100.0f, 100.0f);
+    Params->Momentum.Y = GenerateRandomFloat(-100.0f, 100.0f);
+    Params->AngularMomentum = GenerateRandomFloat(-5.0f, 5.0f);
+}
+
+asteroid_demote_results SplitAsteroid(game_entity *Asteroid, game_state *GameState)
 {
     HackyAssert(!(Asteroid->EntityType == SMALL_ASTEROID));
     HackyAssert(!(Asteroid->Pool->Blocks[Asteroid->BlockIndex].IsFree));
 
-    asteroid_split_results results = {};
+    asteroid_demote_results results = {};
     // This asteroid was split into two instead of simply killed.
-    results.WasSplit = 1;
+    results.WasKilled = false;
 
     // Copy fields over from current asteroid so we can free its space up before
     // trying to allocate new asteroids; otherwise we would artificially be restricting
@@ -117,12 +131,18 @@ asteroid_split_results SplitAsteroid(game_entity *Asteroid)
     Asteroid_A_Info.Momentum.X += GenerateRandomFloat(-20.0f, 20.0f);
     Asteroid_A_Info.Momentum.Y += GenerateRandomFloat(-20.0f, 20.0f);
 
+    Asteroid_A_Info.WorldHeight = GameState->WorldHeight;
+    Asteroid_A_Info.WorldWidth = GameState->WorldWidth;
+
     results.A = SpawnNonPlayerEntity(OldAsteroid.Pool, &Asteroid_A_Info);
 
     Asteroid_B_Info.Type = NewAsteroidType;
     Asteroid_B_Info.Midpoint = OldAsteroid.Master.Midpoint;
     Asteroid_B_Info.OffsetAngle = OldAsteroid.Master.OffsetAngle;
     Asteroid_B_Info.AngularMomentum = OldAsteroid.Master.AngularMomentum + GenerateRandomFloat(-10.0f, 10.0f);
+
+    Asteroid_B_Info.WorldHeight = GameState->WorldHeight;
+    Asteroid_B_Info.WorldWidth = GameState->WorldWidth;
 
     Asteroid_B_Info.Momentum = Perpendicularize(Perpendicularize(Perpendicularize(OldAsteroid.Master.Momentum)));
     Asteroid_B_Info.Momentum.X += GenerateRandomFloat(-20.0f, 20.0f);
@@ -138,44 +158,42 @@ void KillAsteroid(game_entity *Asteroid)
     FreeEntity(Asteroid);  
 }
 
-void InitPlayer(game_entity *PlayerEntity, game_object_info *ObjInfo)
+void InitPlayer(game_state *GameState, game_object_info *ObjInfo)
 {
+    game_entity *PlayerEntity = GameState->Player;
+    PlayerEntity->EntityType = PLAYER;
+    PlayerEntity->SpawnedThisFrame = false; // notion of first-frame CD avoidance doesn't apply to player entity
+    PlayerEntity->BlockIndex = 0;
+    PlayerEntity->Pool = 0;
+
     game_object *Player = &PlayerEntity->Master;
     Player->Type = PLAYER;
     Player->Midpoint.X = ObjInfo->Midpoint.X;
     Player->Midpoint.Y = ObjInfo->Midpoint.Y;
 
-    Player->Model = PushToMemorySegment(MemorySegment, object_model);
-    object_model *P_Model = Player->Model;
-    P_Model->Polygon = PushToMemorySegment(MemorySegment, polygon);
-    polygon *P_Poly = P_Model->Polygon;
-
-    P_Poly->N = PLAYER_NUM_VERTICES;
-    P_Poly->StartVerts = PushToMemorySegment(MemorySegment, vert_set);
-    P_Poly->StartVerts->Verts = PushArrayToMemorySegment(MemorySegment, PLAYER_NUM_VERTICES, vec_2);
-
-    P_Poly->DrawVerts = PushToMemorySegment(MemorySegment, vert_set);
-    P_Poly->DrawVerts->Verts = PushArrayToMemorySegment(MemorySegment, PLAYER_NUM_VERTICES, vec_2);
-
-    // NOTE! These values will need to be stored in a 'resource' file -- a config text file, whatever.
-    for (uint32_t i = 0; i < P_Poly->N; ++i)
-    {
-        SetVertValue(P_Poly->StartVerts, i, Resources->PlayerVertices[i].X, Resources->PlayerVertices[i].Y);
-    }
-
-    P_Model->LineWidth = PLAYER_LINE_WIDTH;
-
-    P_Model->Color.Red = PLAYER_RED;
-    P_Model->Color.Green = PLAYER_GREEN;
-    P_Model->Color.Blue = PLAYER_BLUE;
     Player->Momentum.X = ObjInfo->Momentum.X;
     Player->Momentum.Y = ObjInfo->Momentum.Y;
+
     Player->OffsetAngle = ObjInfo->OffsetAngle;
     Player->AngularMomentum = ObjInfo->AngularMomentum;
-    Player->IsVisible = ObjInfo->InitVisible;
-    Player->Radius = CalculateMaxObjectRadius(Player);
 
-    return Player;
+    InitObjectModel(PlayerEntity);
+    InitObjectClones(PlayerEntity, ObjInfo->WorldWidth, ObjInfo->WorldHeight);
+
+    GameState->PlayerInfo.IsLive = true;
+    GameState->PlayerInfo.Kills = 0;
+    GameState->PlayerInfo.Lives = PLAYER_NUM_LIVES;
+    GameState->PlayerInfo.Score = 0;
+    GameState->PlayerInfo.IFrames = PLAYER_INIT_IFRAMES;
+}
+
+void ResetPlayerForLevel(game_state *GameState)
+{
+    game_object *PlayerObj = &GameState->Player->Master;
+    PlayerObj->AngularMomentum = PLAYER_ANGULAR_MOMENTUM;
+    PlayerObj->Midpoint = GameState->WorldCenter;
+    PlayerObj->Momentum = {};
+    PlayerObj->OffsetAngle = 0.0f;
 }
 
 void InitializeLaserTimers(laser_timing *Timers)
@@ -186,26 +204,39 @@ void InitializeLaserTimers(laser_timing *Timers)
     }
 }
 
-void SpawnLaser(game_entity_pool *Pool, game_object_info *ObjInfoStruct, laser_timing *Timers)
+void SpawnLaser(game_state *GameState, game_object_info *ObjInfoStruct)
 {
-    game_entity *New = SpawnNonPlayerEntity(Pool, ObjInfoStruct);
+    if (GameState->PlayerInfo.NumLiveLasers == MAX_LASER_COUNT)
+    {
+        return;
+    }
+
+    game_entity *New = SpawnNonPlayerEntity(GameState->LaserPool, ObjInfoStruct);
+    laser_timing *Timers = &GameState->LaserTimers;
     Timers->Timers[New->BlockIndex] = Timers->InitialValue;
+    GameState->PlayerInfo.NumLiveLasers++;
 }
 
-void KillLaser(game_entity *Laser, laser_timing *Timers)
+void KillLaser(game_state *GameState, game_entity *Laser)
 {
-    Timers->Timers[Laser->BlockIndex] = 0;
+    GameState->LaserTimers.Timers[Laser->BlockIndex] = 0;
     FreeEntity(Laser);
+    GameState->PlayerInfo.NumLiveLasers--;
 }
 
-void TickLaserTimers(game_entity_pool *Lasers, laser_timing *Timers)
+void TickLaserTimers(game_state *GameState)
 {
+    game_entity_pool *Lasers = GameState->LaserPool;
+    laser_timing *Timers = &GameState->LaserTimers;
     for (uint32_t i = 0; i < MAX_LASER_COUNT; i++)
     {
-        Timers->Timers[i] -= 1;
-        if (Timers->Timers[i] == 0)
+        if (!GameState->LaserPool->Blocks[i].IsFree)
         {
-            KillLaser(&Lasers->Blocks[i].Memory, Timers);
+            Timers->Timers[i] -= 1;
+            if (Timers->Timers[i] == 0)
+            {
+                KillLaser(GameState, &Lasers->Blocks[i].Entity);
+            }
         }
     }
 }
@@ -226,7 +257,7 @@ void RecalcClonePos(game_entity *Entity)
 
 void FireLaser(game_state *GameState)
 {
-    game_object *Player = *GameState->Player->Master;
+    game_object *Player = &GameState->Player->Master;
     game_object_info LaserInfo = {};
 
     // Laser shares the same offset angle as player's ship.
@@ -249,8 +280,10 @@ void FireLaser(game_state *GameState)
     LaserInfo.Midpoint.X = Player->Midpoint.X + X_Rot;
     LaserInfo.Midpoint.Y = Player->Midpoint.Y + Y_Rot;
 
-    UpdateClones(LaserInfo.tity, GameState->WorldWidth, GameState->WorldHeight);
-    SpawnLaser(GameState->LaserPool, &LaserInfo, &GameState->LaserTimers);    
+    LaserInfo.WorldHeight = GameState->WorldHeight;
+    LaserInfo.WorldWidth = GameState->WorldWidth;
+
+    SpawnLaser(GameState, &LaserInfo);    
 }
 
 void TickPlayerEntity(game_state *GameState, asteroids_player_input *Input)
@@ -260,19 +293,27 @@ void TickPlayerEntity(game_state *GameState, asteroids_player_input *Input)
     {
         FireLaser(GameState);
     }
+    
     TickPlayerObject(&GameState->Player->Master, Input);
-
-    RecalcClonePos(Entity);
+    
+    if (GameState->PlayerInfo.IFrames > 0)
+    {
+        GameState->PlayerInfo.IFrames--;
+    }
+    
+    RecalcClonePos(GameState->Player);
 }
 
-void TickLaserEntity(game_entity *Entity, laser_timing *Timers)
+void TickLaserEntity(game_entity *Entity)
 {
-    TickLaserObject(&Entity->Master, Timers);
+    Entity->SpawnedThisFrame = false;
+    TickLaserObject(&Entity->Master);
     RecalcClonePos(Entity);
 }
 
 void TickAsteroidEntity(game_entity *Entity)
 {
+    Entity->SpawnedThisFrame = false;
     TickAsteroidObject(&Entity->Master);
     RecalcClonePos(Entity);
 }
@@ -290,8 +331,8 @@ void TickAllEntities(game_state *GameState, asteroids_player_input *Input)
         memory_block *Cur = &GameState->LaserPool->Blocks[i];
         if (!Cur->IsFree)
         {
-            TickLaserEntity(&Cur->Memory, Timers);
-            HandleEntityEdgeWarping(&Cur->Memory, GameState->WorldWidth, GameState->WorldHeight);
+            TickLaserEntity(&Cur->Entity);
+            HandleEntityEdgeWarping(&Cur->Entity, GameState->WorldWidth, GameState->WorldHeight);
         }
     }
 
@@ -301,32 +342,74 @@ void TickAllEntities(game_state *GameState, asteroids_player_input *Input)
         memory_block *Cur = &GameState->AsteroidPool->Blocks[i];
         if (!Cur->IsFree)
         {
-            TickAsteroidEntity(&Cur->Memory);
-            HandleEntityEdgeWarping(&Cur->Memory, GameState->WorldWidth, GameState->WorldHeight);
+            TickAsteroidEntity(&Cur->Entity);
+            HandleEntityEdgeWarping(&Cur->Entity, GameState->WorldWidth, GameState->WorldHeight);
         }
     }
 }
 
+// Player can only collide with asteroids
+// Asteroids can only collide with lasers
 void CollideAllEntities(game_state *GameState)
 {
+    game_entity *Player = GameState->Player;
+    memory_block *AsteroidBlocks = GameState->AsteroidPool->Blocks;
+    memory_block *LaserBlocks = GameState->LaserPool->Blocks;
 
+    for (uint32_t i = 0; i < GameState->AsteroidPool->PoolInfo.BlockCount; i++)
+    {
+        game_entity *CurAsteroid = &AsteroidBlocks[i].Entity;
+        
+        // As part of the collision process, asteroids that are hit with a laser will get demoted
+        // to two new, smaller asteroids. These will take up spots in the pool but should 
+        if (CurAsteroid->SpawnedThisFrame)
+        {
+            continue;
+        }
+
+        if (GameState->PlayerInfo.IFrames == 0 && CollideObjectWithEntity(&Player->Master, CurAsteroid))
+        {
+            HandlePlayerKilled(GameState);
+            return;
+        }
+
+
+    }
+
+    if (GameState->PlayerInfo.IFrames == 0)
+    {
+        for (uint32_t i = 0; i < GameState->AsteroidPool->PoolInfo.BlockCount; i++)
+        {
+            if (!AsteroidBlocks[i].IsFree && !AsteroidBlocks[i].Entity.SpawnedThisFrame)
+            {
+                if (CollideObjectWithEntity(&Player->Master, &AsteroidBlocks[i].Entity))
+                {
+                    HandlePlayerKilled(GameState);
+                    return; // player only needs to die once, no need to check more lasers, etc.
+                }
+
+            }
+        }
+    }
+
+    for (uint32_t i = 0; i < GameState->LaserPool->PoolInfo.BlockCount; i++)
+    {
+        if (!LaserBlocks[i].IsFree)
+        {
+            for (uint32_t j = 0; j < GameState->AsteroidPool->)
+        }
+    }
 }
 
-void DrawAllEntities(game_state *GameState)
-{
-
-}
-
-void ProcessEntitiesForFrame(game_state *GameState, asteroids_player_input *Input)
+void ProcessEntitiesForFrame(game_state *GameState, asteroids_player_input *Input, platform_bitmap_buffer *OffscreenBuffer)
 {
     TickAllEntities(GameState, Input);
     CollideAllEntities(GameState);
-    DrawAllEntities(GameState);
+    RenderAllEntities(GameState, OffscreenBuffer);
 
     // We only tick the timers at the end of the entity update and render process. This ensures that lasers that are on
     // their final tick will survive long enough to be used in the collision process, etc.
-    TickLaserTimers(GameState->LaserPool, &GameState->LaserTimers);
-
+    TickLaserTimers(GameState);
 }
 
 void HandleEntityEdgeWarping(game_entity *Entity, int ScreenWidth, int ScreenHeight)

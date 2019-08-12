@@ -1,9 +1,9 @@
-#ifndef MODEL_H
-#define MODEL_H
+#pragma once
 
 #include "common.h"
 #include "geometry.h"
 #include "entities.h"
+#include "memory.h"
 
 #define PLAYER_NUM_VERTICES 4
 #define PLAYER_LINE_WIDTH 2.0f
@@ -49,5 +49,3 @@ struct reference_model_polygons
 void InitObjectModel(game_entity *Entity);
 
 void LoadReferencePolygons(game_state *GameState);
-
-#endif

@@ -1,5 +1,4 @@
-#ifndef ASTEROIDS_H
-#define ASTEROIDS_H
+#pragma once
 
 #include "common.h"
 #include "platform.h"
@@ -7,6 +6,8 @@
 #include "entities.h"
 #include "input.h"
 #include "model.h"
+#include "memory.h"
+#include "game_object.h"
 
 
 // Simple rect struct, useful for AABBs
@@ -16,22 +17,11 @@ struct game_rect
     vec_2 BotRight;
 };
 
-struct game_permanent_memory
-{
-    memory_segment PermMemSegment;
-    game_state GameState;
-
-    memory_segment ResourceMemorySegment;
-    memory_segment SceneMemorySegment;        
-    memory_segment LaserMemorySegment;
-    memory_segment AsteroidMemorySegment;
-};
-
 #define PERM_STORAGE_STRUCT_SIZE ((5 * (sizeof(memory_segment))) + (sizeof(game_state)) + (sizeof(loaded_resource_memory)))
 #define LASER_POOL_SIZE (sizeof(game_entity_pool) + (MAX_LASER_COUNT * sizeof(memory_block)))
 #define RESOURCE_MEMORY_SIZE Megabytes(1)
 #define ASTEROID_POOL_SIZE (sizeof(game_entity_pool) + (MAX_ASTEROID_COUNT * sizeof(memory_block)))
-#define SCENE_MEMORY_SIZE ((GAME_PERM_MEMORY_SIZE - LASER_POOL_SIZE - RESOURCE_MEMORY_SIZE - ASTEROID_POOL_SIZE))
+#define SCENE_MEMORY_SIZE (GAME_PERM_MEMORY_SIZE - LASER_POOL_SIZE - RESOURCE_MEMORY_SIZE - ASTEROID_POOL_SIZE)
 
 
 #define PushArrayToMemorySegment(Segment, Count, type) (type *)AssignToMemorySegment_(Segment, (Count)*sizeof(type))
@@ -43,5 +33,3 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
 // Provide these here so other portions of the game layer don't have to talk directly to platform layer.
 void RequestResourceLoad(LPCSTR FileName, void *Buffer, size_t SizeToRead);
 void RequestResourceWrite(LPCSTR FileName, void *Buffer, size_t SizeToWrite);
-
-#endif // asteroids.h

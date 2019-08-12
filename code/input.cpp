@@ -1,3 +1,5 @@
+#pragma once
+
 #include "platform.h"
 #include "geometry.h"
 #include "input.h"

@@ -1,20 +1,10 @@
-#ifndef GAME_OBJECT_H
-#define GAME_OBJECT_H
+#pragma once
 
 #include "common.h"
 #include "geometry.h"
 #include "model.h"
 #include "input.h"
 #include "entities.h"
-
-typedef enum object_type
-{
-    PLAYER,
-    SMALL_ASTEROID,
-    MEDIUM_ASTEROID,
-    LARGE_ASTEROID,
-    LASER
-} object_type;
 
 struct game_object
 {
@@ -24,7 +14,6 @@ struct game_object
     float OffsetAngle;
     float AngularMomentum;
     object_model Model;
-    AABB BoundingBox;
 };
 
 // Used to init game objects
@@ -35,6 +24,8 @@ struct game_object_info
     vec_2 Momentum;
     float OffsetAngle;
     float AngularMomentum;
+    uint32_t WorldWidth;
+    uint32_t WorldHeight;
 };
 
 // Clone is simply a reference to the clone's master, an offset to add to the master's center
@@ -48,7 +39,5 @@ struct object_clone
 };
 
 void TickPlayerObject(game_object *Obj, asteroids_player_input *Input);
-void TickLaserObject(game_object *Obj, laser_timing *Timers);
+void TickLaserObject(game_object *Obj);
 void TickAsteroidObject(game_object *Obj);
-
-#endif

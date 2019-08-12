@@ -1,5 +1,4 @@
-#ifndef COMMON_H
-#define COMMON_H
+#pragma once
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -24,8 +23,7 @@ struct color_triple
     uint8_t Green;
 };
 
-
-float GenerateRandomFloat(float min, float max);
-
-
-#endif
+void InitRand(uint32_t Seed);
+float GenerateRandomFloat(float Min, float Max);
+double GenerateRandomDouble(double Min, double Max);
+uint32_t GenerateRandomUnsignedIntFromZeroTo(uint32_t Max);

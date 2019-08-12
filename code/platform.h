@@ -1,5 +1,4 @@
-#ifndef PLATFORM_H
-#define PLATFORM_H
+#pragma once
 
 #include <stdint.h>
 #include <windows.h>
@@ -15,8 +14,8 @@
 
 // Constants
 
-#define GAME_PERM_MEMORY_SIZE Megabytes(256)
-#define GAME_TRANSIENT_MEMORY_SIZE Megabytes(1024)
+#define GAME_PERM_MEMORY_SIZE Megabytes(1024)
+#define GAME_TRANSIENT_MEMORY_SIZE Megabytes(256)
 
 
 struct platform_bitmap_buffer
@@ -58,5 +57,3 @@ struct platform_player_input
 };
 
 bool32_t ReadFileIntoBuffer(LPCTSTR FileName, void *Buffer, DWORD SizeToRead);
-
-#endif /* PLATFORM_H */

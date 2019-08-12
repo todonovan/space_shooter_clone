@@ -236,11 +236,11 @@ LRESULT CALLBACK AsteroidsWindowCallback(HWND WindHandle,
             {
                 case VK_UP:
                 {
-                    OutputDebugString("Up arrow");
+                    OutputDebugStringA("Up arrow");
                 } break;
                 default:
                 {
-                    OutputDebugString("Other key");
+                    OutputDebugStringA("Other key");
                 } break;
             }
         } break;
@@ -273,10 +273,11 @@ int CALLBACK WinMain(HINSTANCE Instance,
                      int CommandShow)
 {
     WNDCLASS WindowClass = {};
+
     WindowClass.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
     WindowClass.lpfnWndProc = &AsteroidsWindowCallback;
     WindowClass.hInstance = Instance;
-    WindowClass.lpszClassName = "AsteroidsWindowClass";
+    WindowClass.lpszClassName = (LPCWSTR)"AsteroidsWindowClass";
 
     int MonitorRefreshRate = 60;
     int GameUpdateRate = 60;

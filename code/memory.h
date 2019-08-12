@@ -1,15 +1,19 @@
-#ifndef MEMORY_H
-#define MEMORY_H
+#pragma once
 
 #include "common.h"
 #include "entities.h"
+#include "level_management.h"
+#include "geometry.h"
+#include "input.h"
+#include "model.h"
+#include "game_object.h"
 
 #define MAX_BLOCK_COUNT 300
 
 struct memory_block
 {
     bool32_t IsFree;
-    game_entity Memory;
+    game_entity Entity;
 };
 
 struct memory_pool_info
@@ -29,12 +33,13 @@ struct game_entity_pool
 
 struct game_state
 {
-    uint32_t WorldWidth;
-    uint32_t WorldHeight;
-    asteroids_player_input *Input;
     game_entity *Player;
     player_info PlayerInfo;
-    uint32_t CurrentLevel;
+    level_info LevelInfo;
+    uint32_t WorldWidth;
+    uint32_t WorldHeight;
+    vec_2 WorldCenter;
+    asteroids_player_input *Input;
     game_entity_pool *AsteroidPool;
     game_entity_pool *LaserPool;
     laser_timing LaserTimers;
@@ -72,5 +77,4 @@ void InitializeMemoryBlock(memory_block *Block);
 void InitializeGameEntityPool(game_entity_pool *EntityPool, uint32_t BlockCount);
 game_entity * AllocateEntity(game_entity_pool *Pool);
 void FreeEntity(game_entity *Entity);
-
-#endif
+void ClearPool(game_entity_pool *Pool);

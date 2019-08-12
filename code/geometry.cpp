@@ -1,3 +1,5 @@
+#pragma once
+
 #ifndef GEOMETRY_CPP
 #define GEOMETRY_CPP
 

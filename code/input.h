@@ -1,5 +1,4 @@
-#ifndef INPUT_H
-#define INPUT_H
+#pragma once
 
 #include <stdint.h>
 
@@ -41,5 +40,3 @@ struct asteroids_player_input
 
 void InitializePlayerInput(asteroids_player_input *Input);
 void TranslatePlatformInputToGame(asteroids_player_input *Dest, platform_player_input *ThisFrame, asteroids_player_input *LastFrame);
-
-#endif

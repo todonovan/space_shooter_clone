@@ -1,3 +1,5 @@
+#pragma once
+
 #include "model.h"
 #include "common.h"
 #include "geometry.h"
@@ -106,4 +108,5 @@ void InitObjectModel(game_entity *Entity)
         }; break;
     }
     Model->Polygon.C = Entity->Master.Midpoint;
+    ConstructAABB(&Model->Polygon);
 }

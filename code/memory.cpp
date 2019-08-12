@@ -1,11 +1,13 @@
+#pragma once
+
+#include "memory.h"
 #include "asteroids.h"
 #include "common.h"
-#include "memory.h"
 
 void InitializeMemoryBlock(memory_block *Block)
 {
     Block->IsFree = true;
-    Block->Memory = {};
+    Block->Entity = {};
 }
 
 void InitializeGameEntityPool(game_entity_pool *EntityPool, uint32_t BlockCount)
@@ -36,10 +38,10 @@ game_entity * AllocateEntity(game_entity_pool *Pool)
         if (Blocks[i].IsFree)
         {
             Blocks[i].IsFree = false;
-            Blocks[i].Memory.BlockIndex = i;
-            Blocks[i].Memory.Pool = Pool; // Allows other funcs to only need entity ref, no need to track pool ref
+            Blocks[i].Entity.BlockIndex = i;
+            Blocks[i].Entity.Pool = Pool; // Allows other funcs to only need entity ref, no need to track pool ref
             Pool->PoolInfo.NumOccupied++;
-            return &Blocks[i].Memory;
+            return &Blocks[i].Entity;
         }
     }
 
@@ -55,4 +57,12 @@ void FreeEntity(game_entity *Entity)
     Pool->Blocks[Entity->BlockIndex].IsFree = true;
     Pool->PoolInfo.NumOccupied--;
     Entity = NULL;
+}
+
+void ClearPool(game_entity_pool *Pool)
+{
+    for (uint32_t i = 0; i < Pool->PoolInfo.BlockCount; i++)
+    {
+        Pool->Blocks[i].IsFree = true;
+    }
 }
