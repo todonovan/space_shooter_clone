@@ -45,7 +45,7 @@ struct level_info
     uint32_t TimeToNextSpawn;
     uint32_t MeanTimeBetweenSpawns;
     // Same as above, find ways to make this nonlinear if requested.
-    uint32_t MeanTimeBetweenSpawnIncrement;
+    uint32_t MeanTimeBetweenSpawnDecrement;
 };
 
 void InitLevelManager(level_info *LevelInfo);

@@ -4,6 +4,8 @@
 #include "asteroids.h"
 #include "memory.h"
 
+#define UPDATE_MODELS
+
 void BeginMemorySegment(memory_segment *Segment, uint32_t Size, uint8_t *Storage)
 {
     Segment->Size = Size;
@@ -29,6 +31,73 @@ void RequestResourceWrite(LPCSTR FileName, void *Buffer, size_t SizeToWrite)
 
 void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *GamePermMemory, int BufferWidth, int BufferHeight)
 {
+#ifdef UPDATE_MODELS
+            // Translate vectors to file for storage, run this to change shape of objects' models.
+    object_model Player, SmallAst, MediumAst, LargeAst, Laser = {};
+
+
+    Player.Polygon.BaseVertices[0].X = -20.0f;
+    Player.Polygon.BaseVertices[0].Y = -20.0f;
+    Player.Polygon.BaseVertices[1].X = 0.0f;
+    Player.Polygon.BaseVertices[1].Y = 40.0f;
+    Player.Polygon.BaseVertices[2].X = 20.0f;
+    Player.Polygon.BaseVertices[2].Y = -20.0f;
+    Player.Polygon.BaseVertices[3].X = 0.0f;
+    Player.Polygon.BaseVertices[3].Y = 0.0f;
+
+    SmallAst.Polygon.BaseVertices[0].X = -10.0f;
+    SmallAst.Polygon.BaseVertices[0].Y = -5.0f;
+    SmallAst.Polygon.BaseVertices[1].X = -12.0f;
+    SmallAst.Polygon.BaseVertices[1].Y = 8.0f;
+    SmallAst.Polygon.BaseVertices[2].X = 0.0f;
+    SmallAst.Polygon.BaseVertices[2].Y = 12.0f;
+    SmallAst.Polygon.BaseVertices[3].X = 10.0f;
+    SmallAst.Polygon.BaseVertices[3].Y = 6.0f;
+    SmallAst.Polygon.BaseVertices[4].X = 5.0f;
+    SmallAst.Polygon.BaseVertices[4].Y = -4.0f;
+
+    MediumAst.Polygon.BaseVertices[0].X = -20.0f;
+    MediumAst.Polygon.BaseVertices[0].Y = -10.0f;
+    MediumAst.Polygon.BaseVertices[1].X = -24.0f;
+    MediumAst.Polygon.BaseVertices[1].Y = 16.0f;
+    MediumAst.Polygon.BaseVertices[2].X = -5.0f;
+    MediumAst.Polygon.BaseVertices[2].Y = 25.0f;
+    MediumAst.Polygon.BaseVertices[3].X = 12.0f;
+    MediumAst.Polygon.BaseVertices[3].Y = 16.0f;
+    MediumAst.Polygon.BaseVertices[4].X = 10.0f;
+    MediumAst.Polygon.BaseVertices[4].Y = -8.0f;
+    MediumAst.Polygon.BaseVertices[5].X = 0.0f;
+    MediumAst.Polygon.BaseVertices[5].Y = -15.0f;
+
+    LargeAst.Polygon.BaseVertices[0].X = -8.0f;
+    LargeAst.Polygon.BaseVertices[0].Y = -30.0f;
+    LargeAst.Polygon.BaseVertices[1].X = -40.0f;
+    LargeAst.Polygon.BaseVertices[1].Y = -20.0f;
+    LargeAst.Polygon.BaseVertices[2].X = -50.0f;
+    LargeAst.Polygon.BaseVertices[2].Y = 16.0f;
+    LargeAst.Polygon.BaseVertices[3].X = -35.0f;
+    LargeAst.Polygon.BaseVertices[3].Y = 45.0f;
+    LargeAst.Polygon.BaseVertices[4].X = 0.0f;
+    LargeAst.Polygon.BaseVertices[4].Y = 50.0f;
+    LargeAst.Polygon.BaseVertices[5].X = 30.0f;
+    LargeAst.Polygon.BaseVertices[5].Y = 40.0f;
+    LargeAst.Polygon.BaseVertices[6].X = 40.0f;
+    LargeAst.Polygon.BaseVertices[6].Y = 0.0f;
+    LargeAst.Polygon.BaseVertices[7].X = 20.0f;
+    LargeAst.Polygon.BaseVertices[7].Y = -20.0f;
+
+    Laser.Polygon.BaseVertices[0].X = 0.0f;
+    Laser.Polygon.BaseVertices[0].Y = 0.0f;
+    Laser.Polygon.BaseVertices[1].X = 0.0f;
+    Laser.Polygon.BaseVertices[1].Y = 40.0f;
+
+    RequestResourceWrite((LPCSTR)"C:/space_shooter_clone/build/Debug/player_vertices.dat", Player.Polygon.BaseVertices, PLAYER_NUM_VERTICES * (sizeof(vec_2)));
+    RequestResourceWrite((LPCSTR)"C:/space_shooter_clone/build/Debug/small_ast_vertices.dat", SmallAst.Polygon.BaseVertices, SMALL_ASTEROID_NUM_VERTICES * (sizeof(vec_2)));
+    RequestResourceWrite((LPCSTR)"C:/space_shooter_clone/build/Debug/med_ast_vertices.dat", MediumAst.Polygon.BaseVertices, MEDIUM_ASTEROID_NUM_VERTICES * (sizeof(vec_2)));
+    RequestResourceWrite((LPCSTR)"C:/space_shooter_clone/build/Debug/lg_ast_vertices.dat", LargeAst.Polygon.BaseVertices, LARGE_ASTEROID_NUM_VERTICES * (sizeof(vec_2)));
+    RequestResourceWrite((LPCSTR)"C:/space_shooter_clone/build/Debug/laser_vertices.dat", Laser.Polygon.BaseVertices, LASER_NUM_VERTICES * (sizeof(vec_2)));
+
+#endif
     // *******                         INITIALIZE MEMORY SEGMENTS                             ************
 
     // The memory segments subdivide the game permanent memory into separate silos.
@@ -57,13 +126,6 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     BeginMemorySegment(&GamePermMemory->SceneMemorySegment, SCENE_MEMORY_SIZE, (uint8_t *)Memory->PermanentStorage + memory_used);
     memory_used += SCENE_MEMORY_SIZE;
 
-    // Initialize the asteroid memory pool
-    game_entity_pool *AsteroidPool = (game_entity_pool *)GamePermMemory->AsteroidMemorySegment.BaseStorageLocation;
-    InitializeGameEntityPool(AsteroidPool, MAX_ASTEROID_COUNT);
-
-    // Initialize the laser memory pool
-    game_entity_pool *LaserPool = (game_entity_pool *)GamePermMemory->LaserMemorySegment.BaseStorageLocation;
-    InitializeGameEntityPool(LaserPool, MAX_LASER_COUNT);
 
 
 
@@ -87,6 +149,13 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     GameState->WorldCenter.Y = (float)BufferHeight / 2.0f;
     GameState->Player = PushToMemorySegment(&GamePermMemory->PermMemSegment, game_entity);
     GameState->Input = PushToMemorySegment(&GamePermMemory->PermMemSegment, asteroids_player_input);
+    // Initialize the asteroid memory pool
+    GameState->AsteroidPool = (game_entity_pool *)GamePermMemory->AsteroidMemorySegment.BaseStorageLocation;
+    InitializeGameEntityPool(GameState->AsteroidPool, MAX_ASTEROID_COUNT);
+
+    // Initialize the laser memory pool
+    GameState->LaserPool = (game_entity_pool *)GamePermMemory->LaserMemorySegment.BaseStorageLocation;
+    InitializeGameEntityPool(GameState->LaserPool, MAX_LASER_COUNT);
     InitializePlayerInput(GameState->Input);
     InitializeGameEntityPool(GameState->AsteroidPool, MAX_ASTEROID_COUNT);
     InitializeGameEntityPool(GameState->LaserPool, MAX_LASER_COUNT);

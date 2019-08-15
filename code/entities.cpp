@@ -442,6 +442,20 @@ void CollideAllEntities(game_state *GameState)
 
 void ProcessEntitiesForFrame(game_state *GameState, asteroids_player_input *Input, platform_bitmap_buffer *OffscreenBuffer)
 {
+    if (GameState->LevelInfo.CurrentLevel == 0)
+    {
+        level_info *Info = &GameState->LevelInfo;
+        Info->KillScoreMultiplier = 10;
+        Info->LevelsPerSpeedIncrementSegment = 5;
+        Info->MeanTimeBetweenSpawns = 120;
+        Info->MeanTimeBetweenSpawnDecrement = 20;
+        Info->ScoreForOneUp = 1000;
+        Info->ScorePerShot = 1;
+        Info->NumLargeAsteroids = 10;
+        Info->AsteroidIncrementPerLevel = 2;
+        
+        StartNextLevel(GameState);
+    }
     TickAllEntities(GameState, Input);
     CollideAllEntities(GameState);
     RenderAllEntities(GameState, OffscreenBuffer);

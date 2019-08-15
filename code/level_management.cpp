@@ -68,7 +68,12 @@ void StartNextLevel(game_state *GameState)
     {
         Lvl->Speed += Lvl->SpeedIncrementPerSegment;
     }
-    Lvl->MeanTimeBetweenSpawns += Lvl->MeanTimeBetweenSpawnIncrement;
+
+    Lvl->MeanTimeBetweenSpawns -= Lvl->MeanTimeBetweenSpawnDecrement;
+    if (Lvl->MeanTimeBetweenSpawns < 0)
+    {
+        Lvl->MeanTimeBetweenSpawns = 0;
+    }
 
     ClearPool(GameState->AsteroidPool);
     ClearPool(GameState->LaserPool);

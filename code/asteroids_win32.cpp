@@ -338,7 +338,6 @@ int CALLBACK WinMain(HINSTANCE Instance,
             platform_player_input LastInput = {};
             platform_player_input CurrentInput = {};
 
-
             /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
              * Game loop:                                              *
              *    1. Handle all Windows messages from queue            *
