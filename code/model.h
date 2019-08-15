@@ -1,9 +1,16 @@
 #pragma once
 
+// Forward-declarations
+#include "model.fwd.h"
+#include "common.fwd.h"
+#include "geometry.fwd.h"
+#include "entities.fwd.h"
+#include "memory.fwd.h"
+
 #include "common.h"
 #include "geometry.h"
-#include "entities.h"
-#include "memory.h"
+
+
 
 #define PLAYER_NUM_VERTICES 4
 #define PLAYER_LINE_WIDTH 2.0f

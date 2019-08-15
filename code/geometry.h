@@ -1,5 +1,7 @@
 #pragma once
 
+// Forward-declarations
+#include "geometry.fwd.h"
 #include "common.h"
 
 // To simplify memory management (long story), each polygon will hold
@@ -57,10 +59,10 @@ void RotatePolygon(polygon *Poly, float Angle);
 
 projection_vals Project(polygon *Poly, vec_2 Axis);
 
-bool32_t Contains(float N, projection_vals Range);
+bool Contains(float N, projection_vals Range);
 
-bool32_t Overlap(projection_vals A, projection_vals B);
+bool Overlap(projection_vals A, projection_vals B);
 
-bool32_t SeparatingAxisTest(polygon *A, polygon *B);
+bool SeparatingAxisTest(polygon *A, polygon *B);
 
 AABB ConstructAABB(polygon *P);

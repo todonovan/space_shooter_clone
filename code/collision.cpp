@@ -23,7 +23,7 @@
 #include "entities.h"
 #include "game_object.h"
 
-inline bool32_t AABBAABB(AABB A, AABB B)
+inline bool AABBAABB(AABB A, AABB B)
 {
     return (
         (A.Min.X < B.Min.X + B.Lengths.X) &&
@@ -33,12 +33,12 @@ inline bool32_t AABBAABB(AABB A, AABB B)
     );
 }
 
-inline bool32_t CheckCoarseCollision(polygon *Poly1, polygon *Poly2)
+inline bool CheckCoarseCollision(polygon *Poly1, polygon *Poly2)
 {
     return AABBAABB(Poly1->BoundingBox, Poly2->BoundingBox);
 }
 
-bool32_t CheckIfCollisionPolygons(polygon *Poly1, polygon *Poly2)
+bool CheckIfCollisionPolygons(polygon *Poly1, polygon *Poly2)
 {
     if (!CheckCoarseCollision(Poly1, Poly2)) return false;
 
@@ -46,7 +46,7 @@ bool32_t CheckIfCollisionPolygons(polygon *Poly1, polygon *Poly2)
     
 }
 
-bool32_t CollideObjectWithEntity(game_object *Obj, game_entity *Entity)
+bool CollideObjectWithEntity(game_object *Obj, game_entity *Entity)
 {
     polygon *ObjPoly = &Obj->Model.Polygon;
 
@@ -66,7 +66,7 @@ bool32_t CollideObjectWithEntity(game_object *Obj, game_entity *Entity)
     return false;
 }
 
-bool32_t CheckCollisionEntities(game_entity *Entity1, game_entity *Entity2)
+bool CheckCollisionEntities(game_entity *Entity1, game_entity *Entity2)
 {
     if (CheckIfCollisionPolygons(&Entity1->Master.Model.Polygon, &Entity2->Master.Model.Polygon)) return true;
 
@@ -80,7 +80,7 @@ bool32_t CheckCollisionEntities(game_entity *Entity1, game_entity *Entity2)
 
 void HandleAsteroidShot(game_entity *Asteroid, game_state *GameState)
 {
-    asteroid_demote_results DemoteResults = DemoteAsteroid(Asteroid);
+    asteroid_demote_results DemoteResults = DemoteAsteroid(Asteroid, GameState);
     if (DemoteResults.WasKilled)
     {
         GameState->PlayerInfo.Kills++;
@@ -94,61 +94,4 @@ void HandleAsteroidShot(game_entity *Asteroid, game_state *GameState)
         // can likely be changed so DemoteAsteroid() merely returns a bool indicating whether it was killed or not, although
         // having a struct with a named field does make the intention a little clearer.
     }
-}
-
-void HandlePlayerHit(game_state *GameState)
-{
-    GameState->PlayerInfo.IsLive = false;
-}
-
-void HandleCollision(game_entity *Entity1, game_entity *Entity2, game_state *GameState, loaded_resource_memory *Resources, game_permanent_memory *GamePermMem, uint32_t LaserIndex)
-{
-    game_object *Obj1 = Entity1->Master;
-    game_object *Obj2 = Entity2->Master;
-    if (!Obj2->IsVisible) return;
-
-    switch(Obj1->Type)
-    {
-        case PLAYER:
-        {
-            if (Obj2->Type == LASER)
-            {
-                return;
-            }
-            else
-            {
-                HandlePlayerHit(Entity1);
-            }
-        } break;
-        case ASTEROID_SMALL:
-        case ASTEROID_MEDIUM:
-        case ASTEROID_LARGE:
-        {
-            if (Obj2->Type == ASTEROID_SMALL || Obj2->Type == ASTEROID_MEDIUM || Obj2->Type == ASTEROID_LARGE) return; // OG asteroids don't bounce
-            else if (Obj2->Type == LASER)
-            {
-                HandleAsteroidShot(Entity1, GameState, &GamePermMem->AsteroidMemorySegment, Resources);
-                KillLaser(GameState, Entity2);
-            }
-            else if (Obj2->Type == PLAYER)
-            {
-                HandlePlayerHit(Entity2);
-            }
-        } break;
-        case LASER:
-        {
-            if (Obj2->Type == LASER || Obj2->Type == PLAYER) return;
-            else
-            {
-                HandleAsteroidShot(Entity2, GameState, &GamePermMem->AsteroidMemorySegment, Resources);
-                KillLaser(GameState, Entity1);
-            }
-        } break;
-    }
-}
-
-void HandleAllCollisions(game_state *GameState)
-{
-    // Player collisions
-    
 }

@@ -1,7 +1,12 @@
 #pragma once
 
-#include <stdint.h>
+// Forward-declarations
+#include "input.fwd.h"
+#include "common.fwd.h"
+#include "platform.fwd.h"
+#include "geometry.fwd.h"
 
+#include "common.h"
 #include "platform.h"
 #include "geometry.h"
 
@@ -21,14 +26,14 @@ struct thumbstick_history
 
 struct asteroids_player_input
 {
-    bool32_t A_Down;
-    bool32_t A_DownThisFrame;
+    bool A_Down;
+    bool A_DownThisFrame;
 
-    bool32_t B_Down;
-    bool32_t B_DownThisFrame;
+    bool B_Down;
+    bool B_DownThisFrame;
 
-    bool32_t Start_Down;
-    bool32_t Start_DownThisFrame;
+    bool Start_Down;
+    bool Start_DownThisFrame;
 
     float LTrigger;
     float RTrigger;

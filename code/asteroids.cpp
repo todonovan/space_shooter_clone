@@ -1,25 +1,8 @@
 #include <windows.h>
 #include <xinput.h>
 
-
 #include "asteroids.h"
-#include "platform.h"
-#include "input.h"
 #include "memory.h"
-#include "geometry.h"
-#include "entities.h"
-#include "game_object.h"
-#include "collision.h"
-#include "common.cpp"
-#include "input.cpp"
-#include "memory.cpp"
-#include "geometry.cpp"
-#include "collision.cpp"
-#include "game_object.cpp"
-#include "entities.cpp"
-#include "model.cpp"
-#include "render.cpp"
-
 
 void BeginMemorySegment(memory_segment *Segment, uint32_t Size, uint8_t *Storage)
 {
@@ -28,63 +11,9 @@ void BeginMemorySegment(memory_segment *Segment, uint32_t Size, uint8_t *Storage
     Segment->Used = 0;
 }
 
-#define PushArrayToMemorySegment(Segment, Count, type) (type *)AssignToMemorySegment_(Segment, (Count)*sizeof(type))
-#define PushToMemorySegment(Segment, type) (type *)AssignToMemorySegment_(Segment, sizeof(type))
-void * AssignToMemorySegment_(memory_segment *Segment, uint32_t Size)
-{
-    void *Result = Segment->BaseStorageLocation + Segment->Used;
-    Segment->Used += Size;
-    return Result;
-}
-
-void LoadResources(memory_segment *ResourceMemorySegment, loaded_resource_memory *Resources)
-{
-    Resources->PlayerVertices = PushArrayToMemorySegment(ResourceMemorySegment, PLAYER_NUM_VERTICES, vec_2);
-    Resources->SmallAsteroidVertices = PushArrayToMemorySegment(ResourceMemorySegment, SMALL_ASTEROID_NUM_VERTICES, vec_2);
-    Resources->MediumAsteroidVertices = PushArrayToMemorySegment(ResourceMemorySegment, MEDIUM_ASTEROID_NUM_VERTICES, vec_2);
-    Resources->LargeAsteroidVertices = PushArrayToMemorySegment(ResourceMemorySegment, LARGE_ASTEROID_NUM_VERTICES, vec_2);
-    Resources->LaserVertices = PushArrayToMemorySegment(ResourceMemorySegment, LASER_NUM_VERTICES, vec_2);
-
-    // Player
-    DWORD SizeToRead = (DWORD)(sizeof(vec_2) * PLAYER_NUM_VERTICES);
-    if (!ReadFileIntoBuffer((LPCTSTR)"C:/Asteroids/build/Debug/player_vertices.dat", (void *)Resources->PlayerVertices, SizeToRead))
-    {
-        HackyAssert(false);
-    }
-
-    // Small
-    SizeToRead = (DWORD)(sizeof(vec_2) * SMALL_ASTEROID_NUM_VERTICES);
-    if (!ReadFileIntoBuffer((LPCTSTR)"C:/Asteroids/build/Debug/sm_ast_vertices.dat", (void *)Resources->SmallAsteroidVertices, SizeToRead))
-    {
-        HackyAssert(false);
-    }
-
-    // Medium
-    SizeToRead = (DWORD)(sizeof(vec_2) * MEDIUM_ASTEROID_NUM_VERTICES);
-    if (!ReadFileIntoBuffer((LPCTSTR)"C:/Asteroids/build/Debug/med_ast_vertices.dat", (void *)Resources->MediumAsteroidVertices, SizeToRead))
-    {
-        HackyAssert(false);
-    }
-
-    // Large
-    SizeToRead = (DWORD)(sizeof(vec_2) * LARGE_ASTEROID_NUM_VERTICES);
-    if (!ReadFileIntoBuffer((LPCTSTR)"C:/Asteroids/build/Debug/lg_ast_vertices.dat", (void *)Resources->LargeAsteroidVertices, SizeToRead))
-    {
-        HackyAssert(false);
-    }
-
-    // Laser
-    SizeToRead = (DWORD)(sizeof(vec_2) * LASER_NUM_VERTICES);
-    if (!ReadFileIntoBuffer((LPCTSTR)"C:/Asteroids/build/Debug/laser_vertices.dat", (void *)Resources->LaserVertices, SizeToRead))
-    {
-        HackyAssert(false);
-    }
-}
-
 void RequestResourceLoad(LPCSTR FileName, void *Buffer, size_t SizeToRead)
 {
-    DWORD SizeToRead = (DWORD)(SizeToRead);
-    if (!ReadFileIntoBuffer(FileName, Buffer, SizeToRead))
+    if (!ReadFileIntoBuffer(FileName, Buffer, (DWORD)SizeToRead))
     {
         HackyAssert(false);
     }    
@@ -121,9 +50,6 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
 
     BeginMemorySegment(&GamePermMemory->AsteroidMemorySegment, ASTEROID_POOL_SIZE, (uint8_t *)Memory->PermanentStorage + memory_used);
     memory_used += ASTEROID_POOL_SIZE;
-    
-    BeginMemorySegment(&GamePermMemory->ResourceMemorySegment, RESOURCE_MEMORY_SIZE, (uint8_t *)Memory->PermanentStorage + memory_used);
-    memory_used += RESOURCE_MEMORY_SIZE;
 
     BeginMemorySegment(&GamePermMemory->LaserMemorySegment, LASER_POOL_SIZE, (uint8_t *)Memory->PermanentStorage + memory_used);
     memory_used += LASER_POOL_SIZE;
@@ -131,19 +57,12 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     BeginMemorySegment(&GamePermMemory->SceneMemorySegment, SCENE_MEMORY_SIZE, (uint8_t *)Memory->PermanentStorage + memory_used);
     memory_used += SCENE_MEMORY_SIZE;
 
-    // The vertex data for the game objects is requested from the platform layer here.
-    GamePermMemory->Resources = PushToMemorySegment(&GamePermMemory->PermMemSegment, loaded_resource_memory);
-    loaded_resource_memory *ResourceMemory = GamePermMemory->Resources;
-    LoadResources(&GamePermMemory->ResourceMemorySegment, ResourceMemory);
-
     // Initialize the asteroid memory pool
     game_entity_pool *AsteroidPool = (game_entity_pool *)GamePermMemory->AsteroidMemorySegment.BaseStorageLocation;
-    AsteroidPool->Blocks = (memory_block *)GamePermMemory->AsteroidMemorySegment.BaseStorageLocation + sizeof(game_entity_pool);
     InitializeGameEntityPool(AsteroidPool, MAX_ASTEROID_COUNT);
 
     // Initialize the laser memory pool
     game_entity_pool *LaserPool = (game_entity_pool *)GamePermMemory->LaserMemorySegment.BaseStorageLocation;
-    LaserPool->Blocks = (memory_block *)GamePermMemory->LaserMemorySegment.BaseStorageLocation + sizeof(game_entity_pool);
     InitializeGameEntityPool(LaserPool, MAX_LASER_COUNT);
 
 
@@ -171,7 +90,8 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     InitializePlayerInput(GameState->Input);
     InitializeGameEntityPool(GameState->AsteroidPool, MAX_ASTEROID_COUNT);
     InitializeGameEntityPool(GameState->LaserPool, MAX_LASER_COUNT);
-    InitializeLaserTimers(&GameState->LaserTimers);    
+    InitializeLaserTimers(&GameState->LaserTimers);
+    LoadReferencePolygons(GameState);
 
     // The game_entity struct combines the underlying game_object itself, the 'type' of the object, a boolean stating
     // whether the object is live (for memory cleaning purposes), and the set of object clones needed for
@@ -195,7 +115,7 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     // the actual speed at which an asteroid rotates each frame, and is different for each asteroid.
     PlayerInfo.AngularMomentum = PLAYER_ANGULAR_MOMENTUM;
 
-    InitPlayer(GameState->Player, &PlayerInfo);
+    InitPlayer(GameState, &PlayerInfo);
     
     Memory->IsInitialized = true;
 }
@@ -238,7 +158,7 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
 
     HandleControllerInput(GameState);
 
-    ProcessEntitiesForFrame(GameState, GameState->Input);
+    ProcessEntitiesForFrame(GameState, GameState->Input, OffscreenBuffer);
     
     /*
     // Collision handling

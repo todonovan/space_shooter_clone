@@ -1,5 +1,15 @@
 #pragma once
 
+// Forward-declarations
+#include "memory.fwd.h"
+#include "common.fwd.h"
+#include "entities.fwd.h"
+#include "level_management.fwd.h"
+#include "geometry.fwd.h"
+#include "input.fwd.h"
+#include "model.fwd.h"
+#include "game_object.fwd.h"
+
 #include "common.h"
 #include "entities.h"
 #include "level_management.h"
@@ -10,9 +20,12 @@
 
 #define MAX_BLOCK_COUNT 300
 
+#define PushArrayToMemorySegment(Segment, Count, type) (type *)AssignToMemorySegment_(Segment, (Count)*sizeof(type))
+#define PushToMemorySegment(Segment, type) (type *)AssignToMemorySegment_(Segment, sizeof(type))
+
 struct memory_block
 {
-    bool32_t IsFree;
+    bool IsFree;
     game_entity Entity;
 };
 
@@ -48,7 +61,7 @@ struct game_state
 
 struct game_memory
 {
-    bool32_t IsInitialized;
+    bool IsInitialized;
     uint32_t PermanentStorageSize;
     void *PermanentStorage;
     uint32_t TransientStorageSize;
@@ -67,7 +80,6 @@ struct game_permanent_memory
     memory_segment PermMemSegment;
     game_state *GameState;
 
-    memory_segment ResourceMemorySegment;
     memory_segment SceneMemorySegment;        
     memory_segment LaserMemorySegment;
     memory_segment AsteroidMemorySegment;
@@ -78,3 +90,4 @@ void InitializeGameEntityPool(game_entity_pool *EntityPool, uint32_t BlockCount)
 game_entity * AllocateEntity(game_entity_pool *Pool);
 void FreeEntity(game_entity *Entity);
 void ClearPool(game_entity_pool *Pool);
+void * AssignToMemorySegment_(memory_segment *Segment, uint32_t Size);

@@ -4,7 +4,7 @@ void InitRand(uint32_t seed)
 {
     if (seed == 0)
     {
-        srand(time(NULL));
+        srand((uint32_t)time(NULL));
     }
     else
     {

@@ -5,8 +5,8 @@
 #include <tchar.h>
 #include <stdint.h>
 
-#include "common.h"
-#include "asteroids.cpp"
+#include "platform.h"
+#include "asteroids.h"
 
 struct internal_game_window
 {
@@ -167,7 +167,7 @@ void FillSoundBuffer(DWORD ByteToLock, DWORD BytesToWrite)
 }
 
 // Returns true if read was successful, false otherwise
-bool32_t ReadFileIntoBuffer(LPCSTR FileName, void *Buffer, DWORD BytesToRead)
+bool ReadFileIntoBuffer(LPCSTR FileName, void *Buffer, DWORD BytesToRead)
 {
     DWORD NumBytesRead = 0;
     HANDLE File = CreateFileA(FileName, GENERIC_READ, 0, 0, OPEN_EXISTING, 0, 0);
@@ -185,7 +185,7 @@ bool32_t ReadFileIntoBuffer(LPCSTR FileName, void *Buffer, DWORD BytesToRead)
 
 // Returns true if the write was successful, false otherwise
 // Note that calling this function will truncate the associated file
-bool32_t WriteBufferIntoFile(LPCSTR FileName, void *Buffer, DWORD BytesToWrite)
+bool WriteBufferIntoFile(LPCSTR FileName, void *Buffer, DWORD BytesToWrite)
 {
     DWORD NumBytesWritten = 0;
     HANDLE File = CreateFileA(FileName, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
@@ -277,7 +277,7 @@ int CALLBACK WinMain(HINSTANCE Instance,
     WindowClass.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
     WindowClass.lpfnWndProc = &AsteroidsWindowCallback;
     WindowClass.hInstance = Instance;
-    WindowClass.lpszClassName = (LPCWSTR)"AsteroidsWindowClass";
+    WindowClass.lpszClassName = (LPCSTR)"AsteroidsWindowClass";
 
     int MonitorRefreshRate = 60;
     int GameUpdateRate = 60;

@@ -1,14 +1,25 @@
 #pragma once
 
 #include "level_management.h"
-#include "entities.cpp"
-#include "geometry.cpp"
-#include "collision.cpp"
+#include "entities.h"
+#include "geometry.h"
+#include "collision.h"
 
 void InitLevelManager(level_info *LevelInfo)
 {
     LevelInfo->CurrentLevel = 0;
     LevelInfo->LastOneUpThreshold = 0;
+}
+
+void TriggerGameEnd(game_state *GameState)
+{
+    // obviously this needs to change!!!
+    PostQuitMessage(0);
+}
+
+void EndLevel(game_state *GameState)
+{
+
 }
 
 void AddAsteroidToLevel(game_state *GameState)
@@ -83,6 +94,24 @@ void HandlePlayerKilled(game_state *GameState)
     }
 }
 
+// This uses an algorithm from Donald Knuth for finding next arrival via a
+// Poisson distribution. Thanks, Don!
+uint32_t CalculateTimeToNextSpawn(uint32_t MeanArrivalRate)
+{
+    double L = exp(-((double)MeanArrivalRate));
+    uint32_t k = 0;
+    double p = 1.0;
+
+    do
+    {
+        k++;
+        double rand = GenerateRandomDouble(0.0, 1.0);
+        p *= rand;
+    } while (p > L);
+
+    return k - 1;
+}
+
 void TickLevelManagement(game_state *GameState)
 {
     level_info *Info = &GameState->LevelInfo;
@@ -108,33 +137,4 @@ void TickLevelManagement(game_state *GameState)
         Info->TimeSinceAsteroidSpawn = 0;
         Info->TimeToNextSpawn = CalculateTimeToNextSpawn(Info->MeanTimeBetweenSpawns);
     }
-}
-
-void EndLevel(game_state *GameState)
-{
-
-}
-
-void TriggerGameEnd(game_state *GameState)
-{
-    // obviously this needs to change!!!
-    PostQuitMessage(0);
-}
-
-// This uses an algorithm from Donald Knuth for finding next arrival via a
-// Poisson distribution. Thanks, Don!
-uint32_t CalculateTimeToNextSpawn(uint32_t MeanArrivalRate)
-{
-    double L = exp((double)-MeanArrivalRate);
-    uint32_t k = 0;
-    double p = 1.0;
-
-    do
-    {
-        k++;
-        double rand = GenerateRandomDouble(0.0, 1.0);
-        p *= rand;
-    } while (p > L);
-
-    return k - 1;
 }

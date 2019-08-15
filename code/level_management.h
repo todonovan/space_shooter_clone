@@ -1,7 +1,11 @@
 #pragma once
 
+// Forward-declarations
+#include "level_management.fwd.h"
+#include "common.fwd.h"
+#include "memory.fwd.h"
+
 #include "common.h"
-#include "memory.cpp"
 
 /* Levels are structured thusly:
       - Each level has a total number of asteroids that will spawn

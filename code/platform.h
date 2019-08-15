@@ -4,6 +4,10 @@
 #include <windows.h>
 #include <DSound.h>
 
+// Forward-declarations
+
+#include "platform.fwd.h"
+
 // Macros
 
 #define HackyAssert(Expr) if(!(Expr)) { *(uint8_t *)0 = 0;}
@@ -47,13 +51,14 @@ struct platform_player_input
     float LY;
     uint32_t StickDeadzone;
     uint32_t MaxMagnitude;
-    bool32_t A_Pressed;
-    bool32_t B_Pressed;
+    bool A_Pressed;
+    bool B_Pressed;
     float LTrigger;
     float RTrigger;
     float TriggerDeadzone;
     float TriggerMax;
-    bool32_t Start_Pressed;
+    bool Start_Pressed;
 };
 
-bool32_t ReadFileIntoBuffer(LPCTSTR FileName, void *Buffer, DWORD SizeToRead);
+bool ReadFileIntoBuffer(LPCSTR FileName, void *Buffer, DWORD SizeToRead);
+bool WriteBufferIntoFile(LPCSTR FileName, void *Buffer, DWORD SizeToRead);

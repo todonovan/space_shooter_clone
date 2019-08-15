@@ -24,29 +24,29 @@ void InitObjectClones(game_entity *Entity, uint32_t WorldWidth, uint32_t WorldHe
         Clones[i].Master = &Entity->Master;
     }
 
-    Clones[0].Offset.X = -WorldWidth;
-    Clones[0].Offset.Y = -WorldHeight;
+    Clones[0].Offset.X = -(float)WorldWidth;
+    Clones[0].Offset.Y = -(float)WorldHeight;
 
-    Clones[1].Offset.X = -WorldWidth;
-    Clones[1].Offset.Y = 0;
+    Clones[1].Offset.X = -(float)WorldWidth;
+    Clones[1].Offset.Y = 0.0f;
 
-    Clones[2].Offset.X = -WorldWidth;
-    Clones[2].Offset.Y = WorldHeight;
+    Clones[2].Offset.X = -(float)WorldWidth;
+    Clones[2].Offset.Y = (float)WorldHeight;
 
-    Clones[3].Offset.X = 0;
-    Clones[3].Offset.Y = WorldHeight;
+    Clones[3].Offset.X = 0.0f;
+    Clones[3].Offset.Y = (float)WorldHeight;
 
-    Clones[4].Offset.X = WorldWidth;
-    Clones[4].Offset.Y = WorldHeight;
+    Clones[4].Offset.X = (float)WorldWidth;
+    Clones[4].Offset.Y = (float)WorldHeight;
 
-    Clones[5].Offset.X = WorldWidth;
-    Clones[5].Offset.Y = 0;
+    Clones[5].Offset.X = (float)WorldWidth;
+    Clones[5].Offset.Y = 0.0f;
 
-    Clones[6].Offset.X = WorldWidth;
-    Clones[6].Offset.Y = -WorldHeight;
+    Clones[6].Offset.X = (float)WorldWidth;
+    Clones[6].Offset.Y = -(float)WorldHeight;
 
-    Clones[7].Offset.X = 0;
-    Clones[7].Offset.Y = -WorldHeight;
+    Clones[7].Offset.X = 0.0f;
+    Clones[7].Offset.Y = -(float)WorldHeight;
 }
 
 game_entity * SpawnNonPlayerEntity(game_entity_pool *Pool, game_object_info *ObjInfoStruct)
@@ -72,21 +72,6 @@ game_entity * SpawnAsteroid(game_state *GameState, game_object_info *ObjInfoStru
     return SpawnNonPlayerEntity(GameState->AsteroidPool, ObjInfoStruct);
 }
 
-asteroid_demote_results DemoteAsteroid(game_entity *Asteroid, game_state *GameState)
-{
-    asteroid_demote_results results = {};
-
-    if (Asteroid->EntityType == SMALL_ASTEROID)
-    {
-        KillAsteroid(Asteroid);
-        results.WasKilled = true;
-        return results;
-    }
-    else
-    {
-        return SplitAsteroid(Asteroid, GameState);
-    }
-}
 
 void RandomizeAsteroidLocationMomentum(game_object_info *Params)
 {
@@ -116,11 +101,6 @@ asteroid_demote_results SplitAsteroid(game_entity *Asteroid, game_state *GameSta
     // Prepare two new asteroid objects.
     game_object_info Asteroid_A_Info, Asteroid_B_Info = {};
     object_type NewAsteroidType = (OldAsteroid.EntityType == LARGE_ASTEROID) ? MEDIUM_ASTEROID : SMALL_ASTEROID;
-    object_type Type;
-    vec_2 Midpoint;
-    vec_2 Momentum;
-    float OffsetAngle;
-    float AngularMomentum;
 
     Asteroid_A_Info.Type = NewAsteroidType;
     Asteroid_A_Info.Midpoint = OldAsteroid.Master.Midpoint;
@@ -156,6 +136,22 @@ asteroid_demote_results SplitAsteroid(game_entity *Asteroid, game_state *GameSta
 void KillAsteroid(game_entity *Asteroid)
 {
     FreeEntity(Asteroid);  
+}
+
+asteroid_demote_results DemoteAsteroid(game_entity *Asteroid, game_state *GameState)
+{
+    asteroid_demote_results results = {};
+
+    if (Asteroid->EntityType == SMALL_ASTEROID)
+    {
+        KillAsteroid(Asteroid);
+        results.WasKilled = true;
+        return results;
+    }
+    else
+    {
+        return SplitAsteroid(Asteroid, GameState);
+    }
 }
 
 void InitPlayer(game_state *GameState, game_object_info *ObjInfo)
@@ -294,7 +290,7 @@ void TickPlayerEntity(game_state *GameState, asteroids_player_input *Input)
         FireLaser(GameState);
     }
     
-    TickPlayerObject(&GameState->Player->Master, Input);
+    TickPlayerObject(GameState, Input);
     
     if (GameState->PlayerInfo.IFrames > 0)
     {
@@ -316,6 +312,48 @@ void TickAsteroidEntity(game_entity *Entity)
     Entity->SpawnedThisFrame = false;
     TickAsteroidObject(&Entity->Master);
     RecalcClonePos(Entity);
+}
+
+void HandleEntityEdgeWarping(game_entity *Entity, int ScreenWidth, int ScreenHeight)
+{
+    game_object *Master = &Entity->Master;
+    object_clone *Clones = Entity->CloneSet;
+    if (Master->Midpoint.X < 0)
+    {
+        Master->Midpoint.X += ScreenWidth;
+        Master->Model.Polygon.C.X += ScreenWidth;
+        for (int i = 0; i < 8; ++i)
+        {
+            Clones[i].Polygon.C.X += ScreenWidth;
+        }
+    }
+    else if (Master->Midpoint.X >= ScreenWidth)
+    {
+        Master->Midpoint.X -= ScreenWidth;
+        Master->Model.Polygon.C.X -= ScreenWidth;
+        for (int i = 0; i < 8; ++i)
+        {
+            Clones[i].Polygon.C.X -= ScreenWidth;
+        }
+    }
+    if (Master->Midpoint.Y < 0)
+    {
+        Master->Midpoint.Y += ScreenHeight;
+        Master->Model.Polygon.C.Y += ScreenHeight;
+        for (int i = 0; i < 8; ++i)
+        {
+            Clones[i].Polygon.C.Y += ScreenHeight;
+        }
+    }
+    else if (Master->Midpoint.Y >= ScreenHeight)
+    {
+        Master->Midpoint.Y -= ScreenHeight;
+        Master->Model.Polygon.C.Y -= ScreenHeight;
+        for (int i = 0; i < 8; ++i)
+        {
+            Clones[i].Polygon.C.Y -= ScreenHeight;
+        }
+    }
 }
 
 void TickAllEntities(game_state *GameState, asteroids_player_input *Input)
@@ -391,7 +429,7 @@ void CollideAllEntities(game_state *GameState)
             }
         }
     }
-
+    /*
     for (uint32_t i = 0; i < GameState->LaserPool->PoolInfo.BlockCount; i++)
     {
         if (!LaserBlocks[i].IsFree)
@@ -399,6 +437,7 @@ void CollideAllEntities(game_state *GameState)
             for (uint32_t j = 0; j < GameState->AsteroidPool->)
         }
     }
+    */
 }
 
 void ProcessEntitiesForFrame(game_state *GameState, asteroids_player_input *Input, platform_bitmap_buffer *OffscreenBuffer)
@@ -410,46 +449,4 @@ void ProcessEntitiesForFrame(game_state *GameState, asteroids_player_input *Inpu
     // We only tick the timers at the end of the entity update and render process. This ensures that lasers that are on
     // their final tick will survive long enough to be used in the collision process, etc.
     TickLaserTimers(GameState);
-}
-
-void HandleEntityEdgeWarping(game_entity *Entity, int ScreenWidth, int ScreenHeight)
-{
-    game_object *Master = &Entity->Master;
-    object_clone *Clones = Entity->CloneSet;
-    if (Master->Midpoint.X < 0)
-    {
-        Master->Midpoint.X += ScreenWidth;
-        Master->Model.Polygon.C.X += ScreenWidth;
-        for (int i = 0; i < 8; ++i)
-        {
-            Clones[i].Polygon.C.X += ScreenWidth;
-        }
-    }
-    else if (Master->Midpoint.X >= ScreenWidth)
-    {
-        Master->Midpoint.X -= ScreenWidth;
-        Master->Model.Polygon.C.X -= ScreenWidth;
-        for (int i = 0; i < 8; ++i)
-        {
-            Clones[i].Polygon.C.X -= ScreenWidth;
-        }
-    }
-    if (Master->Midpoint.Y < 0)
-    {
-        Master->Midpoint.Y += ScreenHeight;
-        Master->Model.Polygon.C.Y += ScreenHeight;
-        for (int i = 0; i < 8; ++i)
-        {
-            Clones[i].Polygon.C.Y += ScreenHeight;
-        }
-    }
-    else if (Master->Midpoint.Y >= ScreenHeight)
-    {
-        Master->Midpoint.Y -= ScreenHeight;
-        Master->Model.Polygon.C.Y -= ScreenHeight;
-        for (int i = 0; i < 8; ++i)
-        {
-            Clones[i].Polygon.C.Y -= ScreenHeight;
-        }
-    }
 }

@@ -1,15 +1,12 @@
 #pragma once
 
-#ifndef GEOMETRY_CPP
-#define GEOMETRY_CPP
-
 #include <float.h>
 
 #include "common.h"
 #include "geometry.h"
 
 // This function makes use of float-equals to avoid the standard float issues.
-bool32_t VecEq(vec_2 A, vec_2 B)
+bool VecEq(vec_2 A, vec_2 B)
 {
     return FLT_EQ(A.X, B.X) && FLT_EQ(A.Y, B.Y);
 }
@@ -170,7 +167,7 @@ projection_vals Project(polygon *Poly, vec_2 Axis)
     return Result;
 }
 
-bool32_t Contains(float N, projection_vals Range)
+bool Contains(float N, projection_vals Range)
 {
     float A = Range.Min; float B = Range.Max;
     if (B < A)
@@ -182,7 +179,7 @@ bool32_t Contains(float N, projection_vals Range)
     return ((FLT_EQ(N, A) || (N > A)) && (FLT_EQ(N, B) || (N <= B)));
 }
 
-bool32_t Overlap(projection_vals A, projection_vals B)
+bool Overlap(projection_vals A, projection_vals B)
 {
     if (Contains(A.Min, B)) return true;
     if (Contains(A.Max, B)) return true;
@@ -193,7 +190,7 @@ bool32_t Overlap(projection_vals A, projection_vals B)
 }
 
 // I'm pretty sure this needs entirely rewritten
-bool32_t SeparatingAxisTest(polygon *A, polygon *B)
+bool SeparatingAxisTest(polygon *A, polygon *B)
 {
     vec_2 Axis;
     for (uint32_t i = 0; i < A->N; i++)
@@ -237,5 +234,3 @@ bool32_t SeparatingAxisTest(polygon *A, polygon *B)
 
     return true;
 }
-
-#endif
