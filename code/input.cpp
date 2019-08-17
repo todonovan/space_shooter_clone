@@ -54,55 +54,15 @@ void TranslatePlatformInputToGame(asteroids_player_input *Dest, platform_player_
     Dest->Start_Down = ThisFrame->Start_Pressed;
     Dest->Start_DownThisFrame = (ThisFrame->Start_Pressed && !LastFrame->Start_Down);
 
-    float raw_ltrig = ThisFrame->LTrigger > ThisFrame->TriggerDeadzone ? (float)ThisFrame->LTrigger : 0.0f;
-    if (raw_ltrig > 0)
-    {
-        Dest->LTrigger = (raw_ltrig - ThisFrame->TriggerDeadzone) / (ThisFrame->TriggerMax - ThisFrame->TriggerDeadzone);
-    }
-    else
-    {
-        Dest->LTrigger = 0;
-    }
+    // Upscale triggers
+    Dest->LTrigger = ThisFrame->NormalizedLTrigger * 1.25f;
+    Dest->RTrigger = ThisFrame->NormalizedRTrigger * 1.25f;
 
-    float raw_rtrig = ThisFrame->RTrigger > ThisFrame->TriggerDeadzone ? (float)ThisFrame->RTrigger : 0.0f;
-    if (raw_rtrig > 0)
-    {        
-        Dest->RTrigger = (raw_rtrig - ThisFrame->TriggerDeadzone) / (ThisFrame->TriggerMax - ThisFrame->TriggerDeadzone);
-    }
-    else
-    {
-        Dest->RTrigger = 0;
-    }
-    thumbstick raw_stick = {};
-
-    vec_2 left_stick_vec;
-    left_stick_vec.X = ThisFrame->LX;
-    left_stick_vec.Y = ThisFrame->LY;
-
-    raw_stick.Magnitude = Magnitude(left_stick_vec);
-    if (FLT_EQ(raw_stick.Magnitude, 0.0f))
-    {
-        raw_stick.StickVector_Normalized.X = 0.0f;
-        raw_stick.StickVector_Normalized.Y = 0.0f;
-    }
-    else
-    {
-        raw_stick.StickVector_Normalized = Normalize(left_stick_vec);
-
-        if (raw_stick.Magnitude > ThisFrame->StickDeadzone)
-        {
-            if (raw_stick.Magnitude > ThisFrame->MaxMagnitude)
-            {
-                raw_stick.Magnitude = (float)ThisFrame->MaxMagnitude;
-            }
-            raw_stick.Magnitude = (raw_stick.Magnitude - ThisFrame->StickDeadzone) / (ThisFrame->MaxMagnitude - ThisFrame->StickDeadzone);
-        }
-        else
-        {
-            raw_stick.Magnitude = 0.0f;
-        }
-    }
+    thumbstick NewStick = {};
+    NewStick.Magnitude = ThisFrame->NormalizedMagnitude;
+    NewStick.StickVector_Normalized.X = ThisFrame->NormalizedLX;
+    NewStick.StickVector_Normalized.Y = ThisFrame->NormalizedLY;
 
     Dest->LeftStickHistory = LastFrame->LeftStickHistory;
-    UpdateStick(Dest, &raw_stick);
+    UpdateStick(Dest, &NewStick);
 }

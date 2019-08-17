@@ -4,7 +4,7 @@
 #include "asteroids.h"
 #include "memory.h"
 
-#define UPDATE_MODELS
+//#define UPDATE_MODELS
 
 void BeginMemorySegment(memory_segment *Segment, uint32_t Size, uint8_t *Storage)
 {

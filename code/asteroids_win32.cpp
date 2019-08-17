@@ -63,7 +63,7 @@ inline void ClearOffscreenBuffer()
 
 void DrawToWindow(HDC DrawDC)
 {
-    StretchDIBits(DrawDC, 0, 0, (int)GameWindow.Width, (int)GameWindow.Height, 0, 0, GlobalBackbuffer.Width,
+    StretchDIBits(DrawDC, 0, 0, GlobalBackbuffer.Width, GlobalBackbuffer.Height, 0, 0, GlobalBackbuffer.Width,
                   GlobalBackbuffer.Height, GlobalBackbuffer.Memory, &(GlobalBackbuffer.InfoStruct), DIB_RGB_COLORS, SRCCOPY);
 }
 
@@ -74,12 +74,50 @@ platform_player_input GetPlayerInput(DWORD ControllerNumber, platform_player_inp
 
     if (XInputGetState(ControllerNumber, &ControllerState) == ERROR_SUCCESS)
     {
-        PlayerInput.LX = ControllerState.Gamepad.sThumbLX;
-        PlayerInput.LY = ControllerState.Gamepad.sThumbLY;
-        PlayerInput.StickDeadzone = XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE;
+        float LX = ControllerState.Gamepad.sThumbLX;
+        float LY = ControllerState.Gamepad.sThumbLY;
+        float Magnitude = sqrtf((LX * LX) + (LY * LY));
         PlayerInput.MaxMagnitude = 32767;
-		PlayerInput.LTrigger = ControllerState.Gamepad.bLeftTrigger;
-		PlayerInput.RTrigger = ControllerState.Gamepad.bRightTrigger;
+        PlayerInput.NormalizedLX = LX / Magnitude;
+        PlayerInput.NormalizedLY = LY / Magnitude;
+
+        float normalizedMagnitude = 0.0f;
+        if (Magnitude > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE)
+        {
+            if (Magnitude > 32767)
+            {
+                Magnitude = 32767;
+            }
+            Magnitude -= XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE;
+            PlayerInput.NormalizedMagnitude = Magnitude / ((float)(32767 - XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE));
+        }
+        else
+        {
+            Magnitude = 0.0f;
+            PlayerInput.NormalizedMagnitude = 0.0f;
+        }
+
+        uint8_t LeftTrig = (ControllerState.Gamepad.bLeftTrigger > 50) ? ControllerState.Gamepad.bLeftTrigger : 0;
+        uint8_t RightTrig = (ControllerState.Gamepad.bRightTrigger > 50) ? ControllerState.Gamepad.bRightTrigger : 0;
+
+        if (LeftTrig > 0)
+        {
+            PlayerInput.NormalizedLTrigger = ((float)LeftTrig - 50.0f) / (255.0f - 50.0f);
+        }
+        else
+        {
+            PlayerInput.NormalizedLTrigger = 0.0f;
+        }
+
+        if (RightTrig > 0)
+        {
+            PlayerInput.NormalizedRTrigger = -1.0f * (((float)RightTrig - 50.0f) / (255.0f - 50.0f));
+        }
+        else
+        {
+            PlayerInput.NormalizedRTrigger = 0.0f;
+        }
+
         PlayerInput.TriggerDeadzone = 50;
         PlayerInput.A_Pressed = (ControllerState.Gamepad.wButtons & XINPUT_GAMEPAD_A);
         PlayerInput.B_Pressed = (ControllerState.Gamepad.wButtons & XINPUT_GAMEPAD_B);

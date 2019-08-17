@@ -13,19 +13,19 @@ void LoadReferencePolygons(game_state *GameState)
     reference_model_polygons *RefPolys = &GameState->ReferenceModelPolygons;
 
     // Player
-    RequestResourceLoad((LPCSTR)"C:/Code Projects/space_shooter_clone/build/Debug/player_vertices.dat", (void *)(&RefPolys->Player.BaseVertices), (PLAYER_NUM_VERTICES * sizeof(vec_2)));
+    RequestResourceLoad((LPCSTR)"C:/space_shooter_clone/build/Debug/player_vertices.dat", (void *)(&RefPolys->Player.BaseVertices), (PLAYER_NUM_VERTICES * sizeof(vec_2)));
     RefPolys->Player.N = PLAYER_NUM_VERTICES;
     // Small
-    RequestResourceLoad((LPCSTR)"C:/Code Projects/space_shooter_clone/build/Debug/small_ast_vertices.dat", (void *)(&RefPolys->SmallAsteroid.BaseVertices), (SMALL_ASTEROID_NUM_VERTICES * sizeof(vec_2)));
+    RequestResourceLoad((LPCSTR)"C:/space_shooter_clone/build/Debug/small_ast_vertices.dat", (void *)(&RefPolys->SmallAsteroid.BaseVertices), (SMALL_ASTEROID_NUM_VERTICES * sizeof(vec_2)));
     RefPolys->SmallAsteroid.N = SMALL_ASTEROID_NUM_VERTICES;
     // Medium
-    RequestResourceLoad((LPCSTR)"C:/Code Projects/space_shooter_clone/build/Debug/med_ast_vertices.dat", (void *)(&RefPolys->MediumAsteroid.BaseVertices), (MEDIUM_ASTEROID_NUM_VERTICES * sizeof(vec_2)));
+    RequestResourceLoad((LPCSTR)"C:/space_shooter_clone/build/Debug/med_ast_vertices.dat", (void *)(&RefPolys->MediumAsteroid.BaseVertices), (MEDIUM_ASTEROID_NUM_VERTICES * sizeof(vec_2)));
     RefPolys->MediumAsteroid.N = MEDIUM_ASTEROID_NUM_VERTICES;
     // Large
-    RequestResourceLoad((LPCSTR)"C:/Code Projects/space_shooter_clone/build/Debug/lg_ast_vertices.dat", (void *)(&RefPolys->LargeAsteroid.BaseVertices), (LARGE_ASTEROID_NUM_VERTICES * sizeof(vec_2)));
+    RequestResourceLoad((LPCSTR)"C:/space_shooter_clone/build/Debug/lg_ast_vertices.dat", (void *)(&RefPolys->LargeAsteroid.BaseVertices), (LARGE_ASTEROID_NUM_VERTICES * sizeof(vec_2)));
     RefPolys->LargeAsteroid.N = LARGE_ASTEROID_NUM_VERTICES;
     // Laser
-    RequestResourceLoad((LPCSTR)"C:/Code Projects/space_shooter_clone/build/Debug/laser_vertices.dat", (void *)(&RefPolys->Laser.BaseVertices), (LASER_NUM_VERTICES * sizeof(vec_2)));
+    RequestResourceLoad((LPCSTR)"C:/space_shooter_clone/build/Debug/laser_vertices.dat", (void *)(&RefPolys->Laser.BaseVertices), (LASER_NUM_VERTICES * sizeof(vec_2)));
     RefPolys->Laser.N = LASER_NUM_VERTICES;
 
     ReferencePolygons = GameState->ReferenceModelPolygons;

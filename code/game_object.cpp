@@ -22,13 +22,14 @@ void ResetObjectVerticesForFrame(game_object *Obj)
 void TranslateObjectToWorldSpace(game_object *Obj)
 {
     object_model *M = &Obj->Model;
+    RotatePolygon(&Obj->Model.Polygon, Obj->OffsetAngle);
+    
     M->Polygon.C = Obj->Midpoint;
     for (uint32_t i = 0; i < M->Polygon.N; i++)
     {
         TranslateVector(&M->Polygon.Vertices[i], M->Polygon.C);
     }
 
-    RotatePolygon(&Obj->Model.Polygon, Obj->OffsetAngle);
 }
 
 void TickPlayerObject(game_state *GameState, asteroids_player_input *Input)

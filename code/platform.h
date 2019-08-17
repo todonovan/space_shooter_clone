@@ -47,14 +47,15 @@ struct platform_sound_buffer
 
 struct platform_player_input
 {
-    float LX;
-    float LY;
+    float NormalizedLX;
+    float NormalizedLY;
+    float NormalizedMagnitude;
     uint32_t StickDeadzone;
     uint32_t MaxMagnitude;
     bool A_Pressed;
     bool B_Pressed;
-    float LTrigger;
-    float RTrigger;
+    float NormalizedLTrigger;
+    float NormalizedRTrigger;
     float TriggerDeadzone;
     float TriggerMax;
     bool Start_Pressed;

@@ -79,9 +79,9 @@ void RandomizeAsteroidLocationMomentum(game_object_info *Params)
 {
     Params->Midpoint.X = (float) (GenerateRandomUnsignedIntFromZeroTo(Params->WorldWidth));
     Params->Midpoint.Y = (float) (GenerateRandomUnsignedIntFromZeroTo(Params->WorldHeight));
-    Params->Momentum.X = GenerateRandomFloat(-10.0f, 10.0f);
-    Params->Momentum.Y = GenerateRandomFloat(-10.0f, 10.0f);
-    Params->AngularMomentum = GenerateRandomFloat(-5.0f, 5.0f);
+    Params->Momentum.X = GenerateRandomFloat(ASTEROID_V_RANGE_MIN, ASTEROID_V_RANGE_MAX);
+    Params->Momentum.Y = GenerateRandomFloat(ASTEROID_V_RANGE_MIN, ASTEROID_V_RANGE_MAX);
+    Params->AngularMomentum = GenerateRandomFloat(ASTEROID_ROT_RANGE_MIN, ASTEROID_ROT_RANGE_MAX);
 }
 
 asteroid_demote_results SplitAsteroid(game_entity *Asteroid, game_state *GameState)
@@ -107,11 +107,11 @@ asteroid_demote_results SplitAsteroid(game_entity *Asteroid, game_state *GameSta
     Asteroid_A_Info.Type = NewAsteroidType;
     Asteroid_A_Info.Midpoint = OldAsteroid.Master.Midpoint;
     Asteroid_A_Info.OffsetAngle = OldAsteroid.Master.OffsetAngle;
-    Asteroid_A_Info.AngularMomentum = OldAsteroid.Master.AngularMomentum + GenerateRandomFloat(-10.0f, 10.0f);
+    Asteroid_A_Info.AngularMomentum = OldAsteroid.Master.AngularMomentum + GenerateRandomFloat((ASTEROID_ROT_RANGE_MIN / 10.0f), (ASTEROID_ROT_RANGE_MAX / 10.0f));
     
     Asteroid_A_Info.Momentum = Perpendicularize(OldAsteroid.Master.Momentum);
-    Asteroid_A_Info.Momentum.X += GenerateRandomFloat(-20.0f, 20.0f);
-    Asteroid_A_Info.Momentum.Y += GenerateRandomFloat(-20.0f, 20.0f);
+    Asteroid_A_Info.Momentum.X += GenerateRandomFloat((ASTEROID_V_RANGE_MIN / 10.0f), (ASTEROID_V_RANGE_MAX / 10.0f));
+    Asteroid_A_Info.Momentum.X += GenerateRandomFloat((ASTEROID_V_RANGE_MIN / 10.0f), (ASTEROID_V_RANGE_MAX / 10.0f));
 
     Asteroid_A_Info.WorldHeight = GameState->WorldHeight;
     Asteroid_A_Info.WorldWidth = GameState->WorldWidth;
@@ -121,14 +121,14 @@ asteroid_demote_results SplitAsteroid(game_entity *Asteroid, game_state *GameSta
     Asteroid_B_Info.Type = NewAsteroidType;
     Asteroid_B_Info.Midpoint = OldAsteroid.Master.Midpoint;
     Asteroid_B_Info.OffsetAngle = OldAsteroid.Master.OffsetAngle;
-    Asteroid_B_Info.AngularMomentum = OldAsteroid.Master.AngularMomentum + GenerateRandomFloat(-10.0f, 10.0f);
+    Asteroid_A_Info.AngularMomentum = OldAsteroid.Master.AngularMomentum + GenerateRandomFloat((ASTEROID_ROT_RANGE_MIN / 10.0f), (ASTEROID_ROT_RANGE_MAX / 10.0f));
 
     Asteroid_B_Info.WorldHeight = GameState->WorldHeight;
     Asteroid_B_Info.WorldWidth = GameState->WorldWidth;
 
     Asteroid_B_Info.Momentum = Perpendicularize(Perpendicularize(Perpendicularize(OldAsteroid.Master.Momentum)));
-    Asteroid_B_Info.Momentum.X += GenerateRandomFloat(-20.0f, 20.0f);
-    Asteroid_B_Info.Momentum.Y += GenerateRandomFloat(-20.0f, 20.0f);
+    Asteroid_B_Info.Momentum.X += GenerateRandomFloat((ASTEROID_V_RANGE_MIN / 10.0f), (ASTEROID_V_RANGE_MAX / 10.0f));
+    Asteroid_B_Info.Momentum.X += GenerateRandomFloat((ASTEROID_V_RANGE_MIN / 10.0f), (ASTEROID_V_RANGE_MAX / 10.0f));
 
     results.B = SpawnNonPlayerEntity(OldAsteroid.Pool, &Asteroid_B_Info);
 
@@ -192,6 +192,7 @@ void InitPlayer(game_state *GameState)
 
 void InitializeLaserTimers(laser_timing *Timers)
 {
+    Timers->InitialValue = LASER_SPAWN_TIMER;
     for (uint32_t i = 0; i < MAX_LASER_COUNT; i++)
     {
         Timers->Timers[i] = 0;    
@@ -253,6 +254,7 @@ void FireLaser(game_state *GameState)
 {
     game_object *Player = &GameState->Player->Master;
     game_object_info LaserInfo = {};
+    LaserInfo.Type = LASER;
 
     // Laser shares the same offset angle as player's ship.
     float theta = Player->OffsetAngle;
@@ -428,15 +430,24 @@ void CollideAllEntities(game_state *GameState)
             }
         }
     }
-    /*
     for (uint32_t i = 0; i < GameState->LaserPool->PoolInfo.BlockCount; i++)
     {
         if (!LaserBlocks[i].IsFree)
         {
-            for (uint32_t j = 0; j < GameState->AsteroidPool->)
+            for (uint32_t j = 0; j < GameState->AsteroidPool->PoolInfo.BlockCount; j++)
+            {
+                if (!AsteroidBlocks[j].IsFree && !AsteroidBlocks[j].Entity.SpawnedThisFrame)
+                {
+                    if (CollideObjectWithEntity(&LaserBlocks[i].Entity.Master, &AsteroidBlocks[j].Entity))
+                    {
+                        DemoteAsteroid(&AsteroidBlocks[j].Entity, GameState);
+                        KillLaser(GameState, &LaserBlocks[i].Entity);
+                        break;
+                    }
+                }
+            }
         }
     }
-    */
 }
 
 void ProcessEntitiesForFrame(game_state *GameState, asteroids_player_input *Input, platform_bitmap_buffer *OffscreenBuffer)
