@@ -45,11 +45,6 @@ void TickPlayerObject(game_state *GameState, asteroids_player_input *Input)
     TranslateObjectToWorldSpace(Player);
 
     Player->Model.Polygon.BoundingBox = ConstructAABB(&Player->Model.Polygon);
-
-    if (Input->A_DownThisFrame)
-    {
-        FireLaser(GameState);
-    }
 }
 
 void TickLaserObject(game_object *Obj)

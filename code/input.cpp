@@ -79,20 +79,28 @@ void TranslatePlatformInputToGame(asteroids_player_input *Dest, platform_player_
     left_stick_vec.X = ThisFrame->LX;
     left_stick_vec.Y = ThisFrame->LY;
 
-    raw_stick.StickVector_Normalized = Normalize(left_stick_vec);
     raw_stick.Magnitude = Magnitude(left_stick_vec);
-
-    if (raw_stick.Magnitude > ThisFrame->StickDeadzone)
+    if (FLT_EQ(raw_stick.Magnitude, 0.0f))
     {
-        if (raw_stick.Magnitude > ThisFrame->MaxMagnitude)
-        {
-            raw_stick.Magnitude = (float)ThisFrame->MaxMagnitude;
-        }
-        raw_stick.Magnitude = (raw_stick.Magnitude - ThisFrame->StickDeadzone) / (ThisFrame->MaxMagnitude - ThisFrame->StickDeadzone);
+        raw_stick.StickVector_Normalized.X = 0.0f;
+        raw_stick.StickVector_Normalized.Y = 0.0f;
     }
     else
     {
-        raw_stick.Magnitude = 0.0f;
+        raw_stick.StickVector_Normalized = Normalize(left_stick_vec);
+
+        if (raw_stick.Magnitude > ThisFrame->StickDeadzone)
+        {
+            if (raw_stick.Magnitude > ThisFrame->MaxMagnitude)
+            {
+                raw_stick.Magnitude = (float)ThisFrame->MaxMagnitude;
+            }
+            raw_stick.Magnitude = (raw_stick.Magnitude - ThisFrame->StickDeadzone) / (ThisFrame->MaxMagnitude - ThisFrame->StickDeadzone);
+        }
+        else
+        {
+            raw_stick.Magnitude = 0.0f;
+        }
     }
 
     Dest->LeftStickHistory = LastFrame->LeftStickHistory;

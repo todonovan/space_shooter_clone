@@ -107,7 +107,8 @@ void FurthestPointsAlongDirection(vec_2 Dir, vec_2 *Verts, uint32_t N, vec_2 *ma
         if (proj > maxproj)
         {
             maxproj = proj;
-            max = &Verts[i];
+            max->X = Verts[i].X;
+            max->Y = Verts[i].Y;
         }
     }
 }

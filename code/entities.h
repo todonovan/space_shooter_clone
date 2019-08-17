@@ -64,8 +64,8 @@ void RandomizeAsteroidLocationMomentum(game_object_info *Params);
 // this directly otherwise (i.e., while handling asteroid-laser collisions)
 void KillAsteroid(game_entity *Asteroid);
 
-void InitPlayer(game_state *GameState, game_object_info *PlayerInfo);
-void ResetPlayerForLevel(game_state *GameState);
+void SpawnPlayer(game_state *GameState);
+void InitPlayer(game_state *GameState);
 
 void InitializeLaserTimers(laser_timing *Timers);
 void FireLaser(game_state *GameState);

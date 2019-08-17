@@ -22,6 +22,8 @@ void InitObjectClones(game_entity *Entity, uint32_t WorldWidth, uint32_t WorldHe
     for (uint32_t i = 0; i < NUM_OBJECT_CLONES; i++)
     {
         Clones[i].Master = &Entity->Master;
+        Clones[i].Polygon.N = Entity->Master.Model.Polygon.N;
+        Clones[i].Polygon.C = Entity->Master.Model.Polygon.C;
     }
 
     Clones[0].Offset.X = -(float)WorldWidth;
@@ -77,8 +79,8 @@ void RandomizeAsteroidLocationMomentum(game_object_info *Params)
 {
     Params->Midpoint.X = (float) (GenerateRandomUnsignedIntFromZeroTo(Params->WorldWidth));
     Params->Midpoint.Y = (float) (GenerateRandomUnsignedIntFromZeroTo(Params->WorldHeight));
-    Params->Momentum.X = GenerateRandomFloat(-100.0f, 100.0f);
-    Params->Momentum.Y = GenerateRandomFloat(-100.0f, 100.0f);
+    Params->Momentum.X = GenerateRandomFloat(-10.0f, 10.0f);
+    Params->Momentum.Y = GenerateRandomFloat(-10.0f, 10.0f);
     Params->AngularMomentum = GenerateRandomFloat(-5.0f, 5.0f);
 }
 
@@ -154,7 +156,7 @@ asteroid_demote_results DemoteAsteroid(game_entity *Asteroid, game_state *GameSt
     }
 }
 
-void InitPlayer(game_state *GameState, game_object_info *ObjInfo)
+void SpawnPlayer(game_state *GameState)
 {
     game_entity *PlayerEntity = GameState->Player;
     PlayerEntity->EntityType = PLAYER;
@@ -164,32 +166,28 @@ void InitPlayer(game_state *GameState, game_object_info *ObjInfo)
 
     game_object *Player = &PlayerEntity->Master;
     Player->Type = PLAYER;
-    Player->Midpoint.X = ObjInfo->Midpoint.X;
-    Player->Midpoint.Y = ObjInfo->Midpoint.Y;
+    Player->Midpoint.X = GameState->WorldCenter.X;
+    Player->Midpoint.Y = GameState->WorldCenter.Y;
 
-    Player->Momentum.X = ObjInfo->Momentum.X;
-    Player->Momentum.Y = ObjInfo->Momentum.Y;
+    Player->Momentum.X = 0;
+    Player->Momentum.Y = 0;
 
-    Player->OffsetAngle = ObjInfo->OffsetAngle;
-    Player->AngularMomentum = ObjInfo->AngularMomentum;
+    Player->OffsetAngle = 0;
+    Player->AngularMomentum = PLAYER_ANGULAR_MOMENTUM;
 
     InitObjectModel(PlayerEntity);
-    InitObjectClones(PlayerEntity, ObjInfo->WorldWidth, ObjInfo->WorldHeight);
+    InitObjectClones(PlayerEntity, GameState->WorldWidth, GameState->WorldHeight);
+}
+
+void InitPlayer(game_state *GameState)
+{
+    SpawnPlayer(GameState);
 
     GameState->PlayerInfo.IsLive = true;
     GameState->PlayerInfo.Kills = 0;
     GameState->PlayerInfo.Lives = PLAYER_NUM_LIVES;
     GameState->PlayerInfo.Score = 0;
     GameState->PlayerInfo.IFrames = PLAYER_INIT_IFRAMES;
-}
-
-void ResetPlayerForLevel(game_state *GameState)
-{
-    game_object *PlayerObj = &GameState->Player->Master;
-    PlayerObj->AngularMomentum = PLAYER_ANGULAR_MOMENTUM;
-    PlayerObj->Midpoint = GameState->WorldCenter;
-    PlayerObj->Momentum = {};
-    PlayerObj->OffsetAngle = 0.0f;
 }
 
 void InitializeLaserTimers(laser_timing *Timers)
@@ -360,7 +358,6 @@ void TickAllEntities(game_state *GameState, asteroids_player_input *Input)
 {
     // Handle player first
     TickPlayerEntity(GameState, Input);
-    HandleEntityEdgeWarping(GameState->Player, GameState->WorldWidth, GameState->WorldHeight);
 
     // Now lasers
     laser_timing *Timers = &GameState->LaserTimers;
@@ -384,6 +381,8 @@ void TickAllEntities(game_state *GameState, asteroids_player_input *Input)
             HandleEntityEdgeWarping(&Cur->Entity, GameState->WorldWidth, GameState->WorldHeight);
         }
     }
+
+    HandleEntityEdgeWarping(GameState->Player, GameState->WorldWidth, GameState->WorldHeight);
 }
 
 // Player can only collide with asteroids

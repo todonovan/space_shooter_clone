@@ -10,8 +10,11 @@
 void SetPixelInBuffer(platform_bitmap_buffer *Buffer, vec_2 *Coords, color_triple *Colors)
 {
     if (!(Buffer->Memory)) return;
-    int X = (Coords->X < 0) ? ((int)Coords->X + Buffer->Width) : ((int)Coords->X % Buffer->Width);
-    int Y = (Coords->Y < 0) ? ((int)Coords->Y + Buffer->Height) : ((int)Coords->Y % Buffer->Height);
+    uint32_t CoordsX = (uint32_t)Coords->X;
+    uint32_t CoordsY = (uint32_t)Coords->Y;
+
+    int X = (CoordsX < 0) ? (CoordsX + Buffer->Width) : (CoordsX % Buffer->Width);
+    int Y = (CoordsY < 0) ? (CoordsY + Buffer->Height) : (CoordsY % Buffer->Height);
 
     uint8_t *Pixel = (uint8_t *)((char *)(Buffer->Memory) + (Y * Buffer->Width * 4) + (X * 4));
 

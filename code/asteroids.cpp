@@ -91,11 +91,11 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     Laser.Polygon.BaseVertices[1].X = 0.0f;
     Laser.Polygon.BaseVertices[1].Y = 40.0f;
 
-    RequestResourceWrite((LPCSTR)"C:/space_shooter_clone/build/Debug/player_vertices.dat", Player.Polygon.BaseVertices, PLAYER_NUM_VERTICES * (sizeof(vec_2)));
-    RequestResourceWrite((LPCSTR)"C:/space_shooter_clone/build/Debug/small_ast_vertices.dat", SmallAst.Polygon.BaseVertices, SMALL_ASTEROID_NUM_VERTICES * (sizeof(vec_2)));
-    RequestResourceWrite((LPCSTR)"C:/space_shooter_clone/build/Debug/med_ast_vertices.dat", MediumAst.Polygon.BaseVertices, MEDIUM_ASTEROID_NUM_VERTICES * (sizeof(vec_2)));
-    RequestResourceWrite((LPCSTR)"C:/space_shooter_clone/build/Debug/lg_ast_vertices.dat", LargeAst.Polygon.BaseVertices, LARGE_ASTEROID_NUM_VERTICES * (sizeof(vec_2)));
-    RequestResourceWrite((LPCSTR)"C:/space_shooter_clone/build/Debug/laser_vertices.dat", Laser.Polygon.BaseVertices, LASER_NUM_VERTICES * (sizeof(vec_2)));
+    RequestResourceWrite((LPCSTR)"C:/Code Projects/space_shooter_clone/build/Debug/player_vertices.dat", Player.Polygon.BaseVertices, PLAYER_NUM_VERTICES * (sizeof(vec_2)));
+    RequestResourceWrite((LPCSTR)"C:/Code Projects/space_shooter_clone/build/Debug/small_ast_vertices.dat", SmallAst.Polygon.BaseVertices, SMALL_ASTEROID_NUM_VERTICES * (sizeof(vec_2)));
+    RequestResourceWrite((LPCSTR)"C:/Code Projects/space_shooter_clone/build/Debug/med_ast_vertices.dat", MediumAst.Polygon.BaseVertices, MEDIUM_ASTEROID_NUM_VERTICES * (sizeof(vec_2)));
+    RequestResourceWrite((LPCSTR)"C:/Code Projects/space_shooter_clone/build/Debug/lg_ast_vertices.dat", LargeAst.Polygon.BaseVertices, LARGE_ASTEROID_NUM_VERTICES * (sizeof(vec_2)));
+    RequestResourceWrite((LPCSTR)"C:/Code Projects/space_shooter_clone/build/Debug/laser_vertices.dat", Laser.Polygon.BaseVertices, LASER_NUM_VERTICES * (sizeof(vec_2)));
 
 #endif
     // *******                         INITIALIZE MEMORY SEGMENTS                             ************
@@ -150,15 +150,13 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     GameState->Player = PushToMemorySegment(&GamePermMemory->PermMemSegment, game_entity);
     GameState->Input = PushToMemorySegment(&GamePermMemory->PermMemSegment, asteroids_player_input);
     // Initialize the asteroid memory pool
-    GameState->AsteroidPool = (game_entity_pool *)GamePermMemory->AsteroidMemorySegment.BaseStorageLocation;
+    GameState->AsteroidPool = PushToMemorySegment(&GamePermMemory->AsteroidMemorySegment, game_entity_pool);
     InitializeGameEntityPool(GameState->AsteroidPool, MAX_ASTEROID_COUNT);
 
     // Initialize the laser memory pool
-    GameState->LaserPool = (game_entity_pool *)GamePermMemory->LaserMemorySegment.BaseStorageLocation;
+    GameState->LaserPool = PushToMemorySegment(&GamePermMemory->LaserMemorySegment, game_entity_pool);
     InitializeGameEntityPool(GameState->LaserPool, MAX_LASER_COUNT);
     InitializePlayerInput(GameState->Input);
-    InitializeGameEntityPool(GameState->AsteroidPool, MAX_ASTEROID_COUNT);
-    InitializeGameEntityPool(GameState->LaserPool, MAX_LASER_COUNT);
     InitializeLaserTimers(&GameState->LaserTimers);
     LoadReferencePolygons(GameState);
 
@@ -169,22 +167,7 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     // for each object. E.g., the code to spawn a new laser entity handles, internally, the calculation of its
     // midpoint and momentum, as the code is somewhat too complex for a simple argument-wrapper object.
 
-    game_object_info PlayerInfo = {};
-    PlayerInfo.Type = PLAYER;
-
-    // Spawn the player at the midpoint of the world space.
-    PlayerInfo.Midpoint = GameState->WorldCenter;
-
-    PlayerInfo.Momentum.X = 0;
-    PlayerInfo.Momentum.Y = 0;
-    PlayerInfo.OffsetAngle = 0.0f;
-
-    // This concept likely needs adjusted. For lasers, this is always zero. For players, this reflects the speed at
-    // which the player will rotate, but only if the rotate controls are pressed. For asteroids, this denotes
-    // the actual speed at which an asteroid rotates each frame, and is different for each asteroid.
-    PlayerInfo.AngularMomentum = PLAYER_ANGULAR_MOMENTUM;
-
-    InitPlayer(GameState, &PlayerInfo);
+    InitPlayer(GameState);
     
     Memory->IsInitialized = true;
 }

@@ -79,7 +79,7 @@ void StartNextLevel(game_state *GameState)
     ClearPool(GameState->LaserPool);
     InitializeLaserTimers(&GameState->LaserTimers);
 
-    ResetPlayerForLevel(GameState);
+    SpawnPlayer(GameState);
 
     // Kick off level by adding the first asteroid.
     AddAsteroidToLevel(GameState);
@@ -95,7 +95,7 @@ void HandlePlayerKilled(game_state *GameState)
     }
     else
     {
-        ResetPlayerForLevel(GameState);
+        SpawnPlayer(GameState);
     }
 }
 

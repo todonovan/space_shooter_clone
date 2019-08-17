@@ -11,7 +11,7 @@ struct game_rect
     vec_2 BotRight;
 };
 
-#define PERM_STORAGE_STRUCT_SIZE ((5 * (sizeof(memory_segment))) + (sizeof(game_state)))
+#define PERM_STORAGE_STRUCT_SIZE ((100 * (sizeof(memory_segment))) + (sizeof(game_state)))
 #define LASER_POOL_SIZE (sizeof(game_entity_pool) + (MAX_LASER_COUNT * sizeof(memory_block)))
 #define RESOURCE_MEMORY_SIZE Megabytes(1)
 #define ASTEROID_POOL_SIZE (sizeof(game_entity_pool) + (MAX_ASTEROID_COUNT * sizeof(memory_block)))
