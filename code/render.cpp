@@ -83,23 +83,23 @@ void DrawObjectModelIntoBuffer(game_object *Object, platform_bitmap_buffer *Buff
 
     for (uint32_t i = 0; i < Poly->N - 1; ++i)
     {
-        Cur.X = Poly->Vertices[cur].X + Object->Midpoint.X;
-        Cur.Y = Poly->Vertices[cur].Y + Object->Midpoint.Y;
-        Next.X = Poly->Vertices[next].X + Object->Midpoint.X;
-        Next.Y = Poly->Vertices[next].Y + Object->Midpoint.Y;
+        Cur.X = Poly->Vertices[cur].X;
+        Cur.Y = Poly->Vertices[cur].Y;
+        Next.X = Poly->Vertices[next].X;
+        Next.Y = Poly->Vertices[next].Y;
         DrawLineSegmentWithWidth(Buffer, &Cur, &Next, &Model->Color, Model->LineWidth);
         ++cur;
         if (i < Poly->N - 2) ++next;
     }
     if (Object->Type != LASER)
     {
-        Cur.X = Poly->Vertices[cur].X + Object->Midpoint.X;
-        Cur.Y = Poly->Vertices[cur].Y + Object->Midpoint.Y;
-        Next.X = Poly->Vertices[0].X + Object->Midpoint.X;
-        Next.Y = Poly->Vertices[0].Y + Object->Midpoint.Y;
+        Cur.X = Poly->Vertices[cur].X;
+        Cur.Y = Poly->Vertices[cur].Y;
+        Next.X = Poly->Vertices[0].X;
+        Next.Y = Poly->Vertices[0].Y;
         DrawLineSegmentWithWidth(Buffer, &Cur, &Next, &Model->Color, Model->LineWidth);
     }
-}
+}		
 
 // This is a good example of why it might be a better idea to have a data structure that keeps
 // track of pointers to all live entities, so we can iterate through only the living ones, rather
