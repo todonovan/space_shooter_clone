@@ -9,6 +9,7 @@
 #include "input.h"
 #include "render.h"
 #include "collision.h"
+#include "level_management.h"
 
 void InitObjectClones(game_entity *Entity, uint32_t WorldWidth, uint32_t WorldHeight)
 {
@@ -441,7 +442,9 @@ void CollideAllEntities(game_state *GameState)
                 {
                     if (CollideObjectWithEntity(&LaserBlocks[i].Entity.Master, &AsteroidBlocks[j].Entity))
                     {
-                        DemoteAsteroid(&AsteroidBlocks[j].Entity, GameState);
+                        asteroid_demote_results Results = DemoteAsteroid(&AsteroidBlocks[j].Entity, GameState);
+                        LvlAsteroidWasKilled(GameState, &Results);
+
                         KillLaser(GameState, &LaserBlocks[i].Entity);
                         break;
                     }
@@ -462,7 +465,7 @@ void ProcessEntitiesForFrame(game_state *GameState, asteroids_player_input *Inpu
         Info->MeanTimeBetweenSpawnDecrement = 20;
         Info->ScoreForOneUp = 1000;
         Info->ScorePerShot = 1;
-        Info->NumLargeAsteroids = 10;
+        Info->NumLargeAsteroids = 0;
         Info->AsteroidIncrementPerLevel = 2;
         
         StartNextLevel(GameState);

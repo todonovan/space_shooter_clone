@@ -4,6 +4,7 @@
 #include "level_management.fwd.h"
 #include "common.fwd.h"
 #include "memory.fwd.h"
+#include "entities.fwd.h"
 
 #include "common.h"
 
@@ -51,6 +52,8 @@ struct level_info
 void InitLevelManager(level_info *LevelInfo);
 void StartNextLevel(game_state *GameState);
 void HandlePlayerKilled(game_state *GameState);
+
+void LvlAsteroidWasKilled(game_state *GameState, asteroid_demote_results *DemoteResults);
 
 // Every frame, check whether the level-end conditions have been met, and update player scores/lives.
 void TickLevelManagement(game_state *GameState);
