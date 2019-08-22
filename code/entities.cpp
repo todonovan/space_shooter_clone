@@ -175,6 +175,9 @@ void SpawnPlayer(game_state *GameState)
     Player->OffsetAngle = 0;
     Player->AngularMomentum = PLAYER_ANGULAR_MOMENTUM;
 
+    GameState->PlayerInfo.IFrames = PLAYER_INIT_IFRAMES;
+    GameState->PlayerInfo.IsLive = true;
+
     InitObjectModel(PlayerEntity);
     InitObjectClones(PlayerEntity, GameState->WorldWidth, GameState->WorldHeight);
 }
@@ -183,11 +186,9 @@ void InitPlayer(game_state *GameState)
 {
     SpawnPlayer(GameState);
 
-    GameState->PlayerInfo.IsLive = true;
     GameState->PlayerInfo.Kills = 0;
     GameState->PlayerInfo.Lives = PLAYER_NUM_LIVES;
     GameState->PlayerInfo.Score = 0;
-    GameState->PlayerInfo.IFrames = PLAYER_INIT_IFRAMES;
 }
 
 void InitializeLaserTimers(laser_timing *Timers)
@@ -466,6 +467,7 @@ void ProcessEntitiesForFrame(game_state *GameState, asteroids_player_input *Inpu
         
         StartNextLevel(GameState);
     }
+    
     TickAllEntities(GameState, Input);
     CollideAllEntities(GameState);
     RenderAllEntities(GameState, OffscreenBuffer);

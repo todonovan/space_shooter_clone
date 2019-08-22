@@ -159,13 +159,8 @@ void InitializeGamePermanentMemory(game_memory *Memory, game_permanent_memory *G
     InitializePlayerInput(GameState->Input);
     InitializeLaserTimers(&GameState->LaserTimers);
     LoadReferencePolygons(GameState);
-
-    // The game_entity struct combines the underlying game_object itself, the 'type' of the object, a boolean stating
-    // whether the object is live (for memory cleaning purposes), and the set of object clones needed for
-    // collision detection -- specifically, detection at the screen borders to account for screen wrapping.
-    // Creation of an entity makes use of a game_object_info struct. Said struct need not be fully detailed
-    // for each object. E.g., the code to spawn a new laser entity handles, internally, the calculation of its
-    // midpoint and momentum, as the code is somewhat too complex for a simple argument-wrapper object.
+    
+    InitLevelManager(&GameState->LevelInfo);
 
     InitPlayer(GameState);
     
@@ -211,6 +206,8 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
     HandleControllerInput(GameState);
 
     ProcessEntitiesForFrame(GameState, GameState->Input, OffscreenBuffer);
+
+    TickLevelManagement(GameState);
     
     /*
     // Collision handling

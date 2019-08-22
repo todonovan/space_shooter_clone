@@ -74,6 +74,7 @@ platform_player_input GetPlayerInput(DWORD ControllerNumber, platform_player_inp
 
     if (XInputGetState(ControllerNumber, &ControllerState) == ERROR_SUCCESS)
     {
+        PlayerInput.IsControllerActive = true;
         float LX = ControllerState.Gamepad.sThumbLX;
         float LY = ControllerState.Gamepad.sThumbLY;
         float Magnitude = sqrtf((LX * LX) + (LY * LY));
@@ -122,6 +123,22 @@ platform_player_input GetPlayerInput(DWORD ControllerNumber, platform_player_inp
         PlayerInput.A_Pressed = (ControllerState.Gamepad.wButtons & XINPUT_GAMEPAD_A);
         PlayerInput.B_Pressed = (ControllerState.Gamepad.wButtons & XINPUT_GAMEPAD_B);
         PlayerInput.Start_Pressed = (ControllerState.Gamepad.wButtons & XINPUT_GAMEPAD_START);
+    }
+    else
+    {
+        // A controller is not connected. This is necessary in order to not pass junk data
+        // to rest of input handling code.
+        PlayerInput.IsControllerActive = false;
+        PlayerInput.NormalizedLX = 0.0f;
+        PlayerInput.NormalizedLY = 0.0f;
+        PlayerInput.NormalizedMagnitude = 0.0f;
+        PlayerInput.StickDeadzone = XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE;
+        PlayerInput.A_Pressed = false;
+        PlayerInput.B_Pressed = false;
+        PlayerInput.NormalizedLTrigger = 0.0f;
+        PlayerInput.NormalizedRTrigger = 0.0f;
+        PlayerInput.TriggerDeadzone = XINPUT_GAMEPAD_TRIGGER_THRESHOLD;
+        PlayerInput.Start_Pressed = false;
     }
 
     return PlayerInput;
@@ -411,9 +428,12 @@ int CALLBACK WinMain(HINSTANCE Instance,
                 }
 
                 ClearOffscreenBuffer();
+
                 LastInput = CurrentInput;
                 CurrentInput = GetPlayerInput(0, &LastInput);
+
                 UpdateGameAndRender(&GameMemory, &GlobalBackbuffer, &GlobalSoundBuffer, &CurrentInput, &LastInput);
+
                 HDC WindowDC = GetDC(WindowHandle);
                 DrawToWindow(WindowDC);
                 ReleaseDC(WindowHandle, WindowDC);

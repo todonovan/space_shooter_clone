@@ -16,8 +16,8 @@
 struct color_triple
 {
     uint8_t Red;
-    uint8_t Blue;
     uint8_t Green;
+    uint8_t Blue;
 };
 
 void InitRand(uint32_t Seed);

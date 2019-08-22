@@ -47,6 +47,7 @@ struct platform_sound_buffer
 
 struct platform_player_input
 {
+    bool IsControllerActive;
     float NormalizedLX;
     float NormalizedLY;
     float NormalizedMagnitude;
