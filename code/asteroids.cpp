@@ -185,6 +185,8 @@ void UpdateGameAndRender(game_memory *Memory, platform_bitmap_buffer *OffscreenB
         InitializeGamePermanentMemory(Memory, GamePermMemory, OffscreenBuffer->Width, OffscreenBuffer->Height);
     }
 
+    ClearTempMemory(Memory);
+
     game_state *GameState = GamePermMemory->GameState;
 
     asteroids_player_input Last_Input

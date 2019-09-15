@@ -4,6 +4,9 @@
 #include "asteroids.h"
 #include "common.h"
 
+static uint32_t TempMemoryOffset;
+static void *TempMemoryBasePointer;
+
 void InitializeMemoryBlock(memory_block *Block)
 {
     Block->IsFree = true;
@@ -72,4 +75,19 @@ void * AssignToMemorySegment_(memory_segment *Segment, uint32_t Size)
     void *Result = Segment->BaseStorageLocation + Segment->Used;
     Segment->Used += Size;
     return Result;
+}
+
+void *AllocateIntoTempMemory(size_t Size)
+{
+    void *Pointer = (uint8_t *)TempMemoryBasePointer + TempMemoryOffset;
+
+    TempMemoryOffset += Size;
+
+    return Pointer;
+}
+
+void ClearTempMemory(game_memory *Memory)
+{
+    TempMemoryOffset = 0;
+    TempMemoryBasePointer = Memory->TransientStorage;
 }

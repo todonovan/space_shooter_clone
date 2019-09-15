@@ -13,6 +13,10 @@
 #define FLT_EQ_EPS(a, b, eps) ((fabs((a) - (b))) < (eps))
 #define FLT_EQ(a, b) FLT_EQ_EPS(a, b, 0.001f)
 
+// A simple assert; if Expr is false, tries to write into null pointer, leading debugger to fail
+// at that line.
+#define HackyAssert(Expr) if(!(Expr)) { *(uint8_t *)0 = 0;}
+
 struct color_triple
 {
     uint8_t Red;

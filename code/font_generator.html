@@ -1,0 +1,81 @@
+<!Doctype HTML>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Etch A Scetch</title>
+    <link href="https://fonts.googleapis.com/css?family=Lobster" rel="stylesheet">
+    <style>
+        html{
+    margin: 0;
+    padding: 0;
+}
+
+body{
+    font-family: 'Lobster', cursive;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+header{
+    font-size: 25px;
+    text-align: center;
+}
+
+header span{
+    color: #66CDAA;
+}
+
+button{
+    padding: 20px;
+    margin: 20px;
+    font-size: 20px;
+    font-family: 'Lobster', cursive;
+    color: white;
+    border: none;
+    background-color: #FF8C00;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, .5);
+}
+
+button:hover{
+    box-shadow: 0 10px 20px rgba(0, 0, 0, .5);
+}
+
+section{
+
+    display: flex;
+    flex-direction: column;
+}
+
+.row{
+    display: flex;
+}
+
+.square{
+    display: block;
+    background-color:	rgb(255, 255, 255);
+    border: 2px solid black;
+}
+
+.colored{
+    background-color: rgb(0,0,0);
+}
+    </style>
+  </head>
+
+  <body>
+    <header>
+      <h1>Font Generator for my shitty font faces</h1>
+    </header>
+
+    <button class="reset">Reset Canvas Sizes</button>
+    <button class="clear">Clear Cells</button>
+    <button class="printout">Print Out</button>
+    <section>
+
+    </section>
+
+
+    <script src="font_generator.js"></script>
+  </body>
+</html>

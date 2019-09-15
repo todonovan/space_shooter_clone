@@ -91,3 +91,9 @@ game_entity * AllocateEntity(game_entity_pool *Pool);
 void FreeEntity(game_entity *Entity);
 void ClearPool(game_entity_pool *Pool);
 void * AssignToMemorySegment_(memory_segment *Segment, uint32_t Size);
+void ClearTempMemory(game_memory *Memory);
+
+// We don't ever need to worry about 'freeing' temp memory allocated here because the
+// incrementing pointer is reset to the base location at the start of every frame. This
+// obviously means there's a hard one-frame limit on the duration of data stored here.
+void *AllocateIntoTempMemory(size_t Size);

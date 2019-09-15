@@ -256,6 +256,16 @@ bool WriteBufferIntoFile(LPCSTR FileName, void *Buffer, DWORD BytesToWrite)
     }
 }
 
+uint64_t PlatformGetFileSize(LPCSTR FileName)
+{
+    LARGE_INTEGER Size;
+
+    HANDLE File = CreateFileA(FileName, FILE_READ_ATTRIBUTES, 0, 0, OPEN_EXISTING, 0, 0);
+    GetFileSizeEx(File, &Size);
+    CloseHandle(File);
+    return Size.QuadPart;
+}
+
 /* The main callback for our window. This function will handle all
    messages passed from Windows. The default case must be maintained
    to ensure that messages not explicitly handled are handled by Windows. */

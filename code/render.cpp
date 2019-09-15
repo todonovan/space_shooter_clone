@@ -7,7 +7,7 @@
 
 // Note that this may not be portable, as it relies upon the way Windows structures
 // bitmap data in memory.
-void SetPixelInBuffer(platform_bitmap_buffer *Buffer, vec_2 *Coords, color_triple *Colors)
+void SetPixelInBuffer(platform_bitmap_buffer *Buffer, vec_2 *Coords, color_triple *Color)
 {
     if (!(Buffer->Memory)) return;
     int X = (Coords->X < 0) ? ((int)Coords->X + Buffer->Width) : ((int)Coords->X % Buffer->Width);
@@ -15,11 +15,11 @@ void SetPixelInBuffer(platform_bitmap_buffer *Buffer, vec_2 *Coords, color_tripl
 
     uint8_t *Pixel = (uint8_t *)((char *)(Buffer->Memory) + (Y * Buffer->Width * 4) + (X * 4));
 
-    *Pixel = (Colors->Blue);
+    *Pixel = (Color->Blue);
     Pixel++;
-    *Pixel = (Colors->Green);
+    *Pixel = (Color->Green);
     Pixel++;
-    *Pixel = (Colors->Red);
+    *Pixel = (Color->Red);
 }
 
 /// TODO!! This implementation of Bresenham, courtesy of the internet, is busted. Must find better line-drawing

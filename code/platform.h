@@ -10,8 +10,6 @@
 
 // Macros
 
-#define HackyAssert(Expr) if(!(Expr)) { *(uint8_t *)0 = 0;}
-
 #define Kilobytes(Num) ((Num) * 1024)
 #define Megabytes(Num) ((Num) * 1024 * 1024)
 #define ArrayCount(Array) (sizeof(Array) / sizeof((Array)[0]))
@@ -19,7 +17,7 @@
 // Constants
 
 #define GAME_PERM_MEMORY_SIZE Megabytes(1024)
-#define GAME_TRANSIENT_MEMORY_SIZE Megabytes(256)
+#define GAME_TRANSIENT_MEMORY_SIZE Megabytes(1024)
 
 
 struct platform_bitmap_buffer
@@ -64,3 +62,5 @@ struct platform_player_input
 
 bool ReadFileIntoBuffer(LPCSTR FileName, void *Buffer, DWORD SizeToRead);
 bool WriteBufferIntoFile(LPCSTR FileName, void *Buffer, DWORD SizeToRead);
+uint64_t PlatformGetFileSize(LPCSTR FileName);
+void PlatformSetPixel(vec_2)
