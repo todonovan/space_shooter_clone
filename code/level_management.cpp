@@ -4,6 +4,7 @@
 #include "entities.h"
 #include "geometry.h"
 #include "collision.h"
+#include "entities.h"
 
 void InitLevelManager(level_info *LevelInfo)
 {
@@ -52,50 +53,22 @@ void AddAsteroidToLevel(game_state *GameState)
         TranslateVector(&NewAsteroid->Master.Midpoint, ScaledAABB.Lengths);
         NewAsteroid->Master.Model.Polygon.C = NewAsteroid->Master.Midpoint;
     }
+
+    GameState->LevelInfo.NumLargeAsteroidsSpawned++;
 }
 
-void StartNextLevel(game_state *GameState)
+void LvlAsteroidWasKilled(game_state *GameState, asteroid_demote_results *DemoteResults)
 {
-    GameState->PlayerInfo.IsLive = true;
-    GameState->PlayerInfo.NumLiveLasers = 0;
-    level_info *Lvl = &GameState->LevelInfo;
-
-    Lvl->CurrentLevel++;
-    Lvl->NumLargeAsteroids += Lvl->AsteroidIncrementPerLevel;
-    Lvl->NumLargeAsteroidsSpawned = 0;
-    Lvl->NumSmallAsteroidsKilled = 0;
-    if (Lvl->CurrentLevel % Lvl->LevelsPerSpeedIncrementSegment == 0)
+    level_info *Info = &GameState->LevelInfo;
+    if (DemoteResults->WasKilled)
     {
-        Lvl->Speed += Lvl->SpeedIncrementPerSegment;
-    }
-
-    Lvl->MeanTimeBetweenSpawns -= Lvl->MeanTimeBetweenSpawnDecrement;
-    if (Lvl->MeanTimeBetweenSpawns < 0)
-    {
-        Lvl->MeanTimeBetweenSpawns = 0;
-    }
-
-    ClearPool(GameState->AsteroidPool);
-    ClearPool(GameState->LaserPool);
-    InitializeLaserTimers(&GameState->LaserTimers);
-
-    SpawnPlayer(GameState);
-
-    // Kick off level by adding the first asteroid.
-    AddAsteroidToLevel(GameState);
-}
-
-void HandlePlayerKilled(game_state *GameState)
-{
-    GameState->PlayerInfo.IsLive = false;
-    GameState->PlayerInfo.Lives--;
-    if (GameState->PlayerInfo.Lives == 0)
-    {
-        TriggerGameEnd(GameState);
+        Info->NumSmallAsteroidsKilled++;
+        GameState->PlayerInfo.Kills++;
+        GameState->PlayerInfo.Score += Info->ScorePerShot * Info->KillScoreMultiplier;
     }
     else
     {
-        SpawnPlayer(GameState);
+        GameState->PlayerInfo.Score += Info->ScorePerShot;
     }
 }
 
@@ -117,6 +90,49 @@ uint32_t CalculateTimeToNextSpawn(uint32_t MeanArrivalRate)
     return k - 1;
 }
 
+void StartNextLevel(game_state *GameState)
+{
+    GameState->PlayerInfo.IsLive = true;
+    GameState->PlayerInfo.NumLiveLasers = 0;
+    level_info *Lvl = &GameState->LevelInfo;
+
+    Lvl->CurrentLevel++;
+    Lvl->NumLargeAsteroids += Lvl->AsteroidIncrementPerLevel;
+    Lvl->NumLargeAsteroidsSpawned = 0;
+    Lvl->NumSmallAsteroidsKilled = 0;
+    Lvl->TimeSinceAsteroidSpawn = 0;
+    if (Lvl->CurrentLevel % Lvl->LevelsPerSpeedIncrementSegment == 0)
+    {
+        Lvl->Speed += Lvl->SpeedIncrementPerSegment;
+    }
+
+    Lvl->MeanTimeBetweenSpawns -= Lvl->MeanTimeBetweenSpawnDecrement;
+    if (Lvl->MeanTimeBetweenSpawns < 0)
+    {
+        Lvl->MeanTimeBetweenSpawns = 0;
+    }
+
+    ClearPool(GameState->AsteroidPool);
+    ClearPool(GameState->LaserPool);
+    InitializeLaserTimers(&GameState->LaserTimers);
+
+    SpawnPlayer(GameState);
+}
+
+void HandlePlayerKilled(game_state *GameState)
+{
+    GameState->PlayerInfo.IsLive = false;
+    GameState->PlayerInfo.Lives--;
+    if (GameState->PlayerInfo.Lives == 0)
+    {
+        TriggerGameEnd(GameState);
+    }
+    else
+    {
+        SpawnPlayer(GameState);
+    }
+}
+
 void TickLevelManagement(game_state *GameState)
 {
     level_info *Info = &GameState->LevelInfo;
@@ -135,11 +151,12 @@ void TickLevelManagement(game_state *GameState)
     }
 
     // Spawn new asteroid if appropriate
-    Info->TimeSinceAsteroidSpawn++;
-    if (Info->TimeSinceAsteroidSpawn == Info->TimeToNextSpawn)
+    if ((Info->TimeSinceAsteroidSpawn == Info->TimeToNextSpawn) && Info->NumLargeAsteroidsSpawned != Info->NumLargeAsteroids)
     {
         AddAsteroidToLevel(GameState);
         Info->TimeSinceAsteroidSpawn = 0;
         Info->TimeToNextSpawn = CalculateTimeToNextSpawn(Info->MeanTimeBetweenSpawns);
     }
+
+    Info->TimeSinceAsteroidSpawn++;
 }

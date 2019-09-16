@@ -18,9 +18,9 @@
 #define LASER_SPAWN_TIMER 77
 #define PLAYER_NUM_LIVES 5 // this is temporary clearly
 #define PLAYER_INIT_IFRAMES 120 // 2 secs of invincibility on spawn
-#define ASTEROID_V_RANGE_MAX 0.00005f
+#define ASTEROID_V_RANGE_MAX 0.5f
 #define ASTEROID_V_RANGE_MIN -ASTEROID_V_RANGE_MAX
-#define ASTEROID_ROT_RANGE_MAX 0.005f
+#define ASTEROID_ROT_RANGE_MAX 0.05f
 #define ASTEROID_ROT_RANGE_MIN -ASTEROID_ROT_RANGE_MAX
 
 

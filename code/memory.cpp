@@ -68,6 +68,8 @@ void ClearPool(game_entity_pool *Pool)
     {
         Pool->Blocks[i].IsFree = true;
     }
+    
+    Pool->PoolInfo.NumOccupied = 0;
 }
 
 void * AssignToMemorySegment_(memory_segment *Segment, uint32_t Size)
